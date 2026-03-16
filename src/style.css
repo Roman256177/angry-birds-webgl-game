@@ -9,10 +9,10 @@
 :root {
 	--gap: 2rem;
 	--red: #ea002a;
-	--transparent: #ffffff75;
-	--transition: 0.5s;
-	--transition-hover: 0.3s;
-	--blur: 4px;
+	--white-transparent: #ffffff75;
+	--duration: 0.5s;
+	--duration-fast: 0.25s;
+	--ease: ease;
 }
 
 html,
@@ -36,6 +36,8 @@ button {
 	justify-content: center;
 }
 
+/*-- Loader --*/
+
 #loader {
 	align-items: center;
 	background-color: #fff;
@@ -44,13 +46,19 @@ button {
 	justify-content: center;
 	position: fixed;
 	z-index: 9999;
+	transition: opacity 1s var(--ease);
+	opacity: 1;
+}
+
+#loader.end {
+	opacity: 0;
 }
 
 #loader.remove {
 	display: none;
 }
 
-#loader-wrap {
+#loader-inner {
 	align-items: center;
 	display: flex;
 	gap: var(--gap);
@@ -58,29 +66,43 @@ button {
 	width: 90vw;
 }
 
-#loader-text {
+#loader-label {
 	display: grid;
 	place-items: center end;
 }
 
-#loading,
-#loaded {
+#loader-label-loading,
+#loader-label-loaded {
 	grid-area: 1 / 1;
 }
 
-#loader-bar {
+#loader-label-loading span,
+#loader-label-loaded span {
+	opacity: 0;
+	transition: opacity var(--duration) var(--ease);
+}
+
+#loader-label-loading span.show,
+#loader-label-loaded span.show {
+	opacity: 1;
+}
+
+#loader-progress {
 	background-color: #ccc;
 	border-radius: 2px;
 	height: 2px;
 	position: relative;
 	transform: scaleX(0);
 	transform-origin: left;
-	transition: transform var(--transition) ease;
+	transition: transform var(--duration) var(--ease);
 	width: min(350px, 100%);
-	will-change: transform;
 }
 
-#loader-bar::before {
+#loader-progress.show {
+	transform: scaleX(1);
+}
+
+#loader-progress::before {
 	background-color: var(--red);
 	border-radius: inherit;
 	content: "";
@@ -91,7 +113,7 @@ button {
 	transition: inherit;
 }
 
-#press-enter {
+#loader-cta {
 	align-items: center;
 	bottom: var(--gap);
 	display: flex;
@@ -100,21 +122,22 @@ button {
 	opacity: 0;
 	position: absolute;
 	transform: translateY(1rem);
-	transition: opacity var(--transition) ease, transform var(--transition) ease;
+	transition: opacity var(--duration) var(--ease), transform var(--duration) var(--ease);
 }
 
-#press-enter.show {
+#loader-cta.show {
 	opacity: 1;
 	transform: translateY(0);
 }
 
-#enter {
+#loader-enter {
+	font: inherit;
 	padding: 6px 12px;
 	position: relative;
 }
 
-#enter::before {
-	animation: enter 2s linear var(--transition) infinite;
+#loader-enter::before {
+	animation: enter 2s linear var(--duration) infinite;
 	border: 1px solid var(--red);
 	border-radius: 6px;
 	content: "";
@@ -135,14 +158,115 @@ button {
 	}
 }
 
-#overlay {
+/*-- Hud --*/
+
+#hud {
 	color: #fff;
 	inset: 0;
 	position: fixed;
 	z-index: 1;
 }
 
-#controls {
+/*-- Stars --*/
+
+#hud-stars {
+	align-items: center;
+	bottom: var(--gap);
+	display: flex;
+	font-size: 1.5rem;
+	gap: 1rem;
+	left: var(--gap);
+	position: absolute;
+}
+
+#total-stars {
+	font-size: 2rem;
+}
+
+/*-- Levels --*/
+
+#hud-levels {
+	align-items: center;
+	bottom: var(--gap);
+	display: flex;
+	gap: 3rem;
+	justify-content: center;
+	left: 50%;
+	position: absolute;
+	transform: translateX(-50%);
+}
+
+.btn-level {
+	border: 2px solid #fff;
+	border-radius: 50%;
+	display: grid;
+	height: 54px;
+	place-items: center;
+	position: relative;
+	width: 54px;
+	overflow: hidden;
+}
+
+.btn-level.locked {
+	border-color: var(--white-transparent);
+	cursor: not-allowed;
+}
+
+.btn-level-label,
+.btn-level-icon-lock {
+	grid-area: 1 / 1;
+}
+
+.btn-level-label {
+	font-size: 1.5rem;
+	transition: opacity var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+}
+
+.btn-level.locked .btn-level-label,
+.btn-level:hover .btn-level-label {
+	opacity: 0;
+	transform: scale(0.5);
+}
+
+.btn-level-icon-star {
+	color: var(--white-transparent);
+	opacity: 0;
+	position: absolute;
+	transition: opacity var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+}
+
+.btn-level-icon-star.earned {
+	color: #fff;
+}
+
+.btn-level-icon-star:nth-of-type(1) {
+	top: 7px;
+	left: 11px;
+	transform: translate(-1rem, -1rem);
+}
+
+.btn-level-icon-star:nth-of-type(2) {
+	bottom: 7px;
+	left: 11px;
+	transition-delay: 50ms;
+	transform: translate(-1rem, 1rem);
+}
+
+.btn-level-icon-star:nth-of-type(3) {
+	bottom: 17px;
+	right: 6px;
+	transition-delay: 100ms;
+	transform: translate(1rem, 0);
+}
+
+.btn-level:hover:not(.locked) .btn-level-icon-star {
+	opacity: 1;
+	transform: translate(0, 0) rotate(180deg);
+}
+
+/*-- Controls --*/
+
+#hud-controls {
 	bottom: var(--gap);
 	display: flex;
 	gap: var(--gap);
@@ -150,7 +274,7 @@ button {
 	right: var(--gap);
 }
 
-#sound-btn {
+#btn-sound {
 	align-self: flex-end;
 	align-items: flex-end;
 	gap: 4px;
@@ -158,22 +282,22 @@ button {
 	transform: translateY(-3px);
 }
 
-#sound-btn span {
+#btn-sound span {
 	background-color: #fff;
 	border-radius: 2px;
 	height: 6px;
 	width: 2px;
 }
 
-#sound-btn.active span {
+#btn-sound.active span {
 	animation: sound 1s infinite ease-in-out;
 }
 
-#sound-btn span:nth-of-type(2) {
+#btn-sound span:nth-of-type(2) {
 	animation-delay: 0.4s;
 }
 
-#sound-btn span:nth-of-type(3) {
+#btn-sound span:nth-of-type(3) {
 	animation-delay: 0.2s;
 }
 
@@ -189,8 +313,19 @@ button {
 	}
 }
 
-#zoom,
-#force {
+.icon-fs {
+	opacity: 0;
+	transition: opacity var(--duration) var(--ease);
+}
+
+.icon-fs.active {
+	opacity: 1;
+}
+
+/*-- Zoom, Force --*/
+
+#hud-zoom,
+#hud-force {
 	display: flex;
 	flex-direction: column-reverse;
 	gap: 1rem;
@@ -199,313 +334,173 @@ button {
 	transform: translateY(-50%);
 }
 
-#zoom {
+#hud-zoom {
 	align-items: flex-end;
 	right: var(--gap);
 }
 
-#force {
-	align-items: flex-start;
+#hud-force {
 	left: var(--gap);
 }
 
-#zoom span,
-#force span {
-	backdrop-filter: blur(var(--blur));
-	background-color: var(--transparent);
+#hud-zoom span,
+#hud-force span {
+	background-color: var(--white-transparent);
 	border-radius: 2px;
 	height: 2px;
 	transform: scaleX(0);
-	transition: background-color var(--transition) ease, transform var(--transition) ease;
+	transition: background-color var(--duration) var(--ease), transform var(--duration) var(--ease);
 }
 
-#zoom span {
+#hud-zoom span {
 	transform-origin: right;
 	width: 1rem;
 }
 
-#force span {
+#hud-force span {
 	transform-origin: left;
 }
 
-#zoom span:nth-of-type(odd) {
+#hud-zoom span:nth-of-type(odd) {
 	width: 1.5rem;
 }
 
-#zoom span.active,
-#force span.active {
+#hud-zoom span.active,
+#hud-force span.active {
 	background-color: #fff;
 }
 
-#zoom span.show,
-#force span.show {
+#hud-zoom span.show,
+#hud-force span.show {
 	transform: scaleX(1);
 }
 
-#force span:nth-of-type(1) {
+#hud-force span:nth-of-type(1) {
 	width: 0.5rem;
-	background-color: var(--red);
 }
 
-#force span:nth-of-type(2) {
+#hud-force span:nth-of-type(2) {
 	width: 0.75rem;
-	background-color: var(--red);
 }
 
-#force span:nth-of-type(3) {
+#hud-force span:nth-of-type(3) {
 	width: 1rem;
 }
 
-#force span:nth-of-type(4) {
+#hud-force span:nth-of-type(4) {
 	width: 1.25rem;
 }
 
-#force span:nth-of-type(5) {
+#hud-force span:nth-of-type(5) {
 	width: 1.5rem;
 }
 
-#force span:nth-of-type(6) {
+#hud-force span:nth-of-type(6) {
 	width: 1.75rem;
 }
 
-#force span:nth-of-type(7) {
+#hud-force span:nth-of-type(7) {
 	width: 2rem;
 }
 
-#force span:nth-of-type(8) {
+#hud-force span:nth-of-type(8) {
 	width: 2.25rem;
 }
 
-#force span:nth-of-type(9) {
+#hud-force span:nth-of-type(9) {
 	width: 2.5rem;
 }
 
-#stars {
-	align-items: center;
-	bottom: var(--gap);
-	display: flex;
-	font-size: 1.5rem;
-	gap: 1rem;
-	left: var(--gap);
-	position: absolute;
-}
+/*-- Level --*/
 
-#stars-number {
-	font-size: 2rem;
-}
-
-#levels {
-	align-items: center;
-	bottom: var(--gap);
-	display: flex;
-	gap: var(--gap);
-	justify-content: center;
-	left: 50%;
-	position: absolute;
-	transform: translateX(-50%);
-}
-
-.level-connect {
-	background-color: #fff;
-	border-radius: 50%;
-	height: 4px;
-	width: 4px;
-}
-
-.level-btn {
-	border: 2px solid #fff;
-	border-radius: 50%;
-	display: grid;
-	height: 54px;
-	place-items: center;
-	position: relative;
-	width: 54px;
-}
-
-.level-btn.locked {
-	border-color: var(--transparent);
-	cursor: not-allowed;
-}
-
-.level-btn-number,
-.level-btn-play,
-.level-btn-lock {
-	grid-area: 1 / 1;
-}
-
-.level-btn-number {
-	font-size: 1.5rem;
-	transition: opacity var(--transition-hover) ease, transform var(--transition-hover) ease;
-}
-
-.level-btn.locked .level-btn-number,
-.level-btn:hover .level-btn-number {
-	opacity: 0;
-	transform: translateX(1rem) scale(0.5);
-}
-
-.level-btn-play {
-	opacity: 0;
-	transform: translateX(-1rem) scale(0.5);
-	transition: opacity var(--transition-hover) ease, transform var(--transition-hover) ease;
-}
-
-.level-btn:hover:not(.locked) .level-btn-play {
-	opacity: 1;
-	transform: translateX(0) scale(1);
-}
-
-.level-btn-star {
-	color: var(--transparent);
-	opacity: 0;
-	pointer-events: none;
-	position: absolute;
-	transition: opacity var(--transition-hover) ease, transform var(--transition-hover) ease;
-}
-
-.level-btn-star.earned {
-	color: #fff;
-}
-
-.level-btn-star.left {
-	left: -12px;
-	top: -20px;
-	transform: translate(0.5rem, 0.5rem);
-}
-
-.level-btn-star.middle {
-	left: 50%;
-	top: -32px;
-	transform: translate(-50%, 0.5rem);
-	transition-delay: 50ms;
-}
-
-.level-btn-star.right {
-	right: -12px;
-	top: -20px;
-	transform: translate(-0.5rem, 0.5rem);
-	transition-delay: 100ms;
-}
-
-.level-btn:hover:not(.locked) .level-btn-star {
-	opacity: 1;
-	transform: translate(0, 0);
-}
-
-.level-btn:hover:not(.locked) .level-btn-star.middle {
-	transform: translate(-50%, 0);
-}
-
-/**/
-#level-info {
-	backdrop-filter: blur(var(--blur));
-	border: 2px solid var(--transparent);
-	border-radius: 1rem;
-	display: flex;
-	gap: var(--gap);
+#hud-level {
 	left: 50%;
 	opacity: 0;
-	padding: 1rem 0;
 	position: absolute;
 	top: var(--gap);
-	transform: translateX(-50%);
-}
-
-#info-level {
-	align-items: center;
-	align-self: stretch;
-	border-right: 2px solid var(--transparent);
+	transform: translate(-50%, -1rem);
+	transition: transform var(--duration) var(--ease), opacity var(--duration) var(--ease);
 	display: flex;
-	font-size: 1.75rem;
-	justify-content: center;
-	margin-block: -1rem;
-	padding: 0 1.5rem;
-}
-
-.info-wrap {
+	flex-direction: column;
 	align-items: center;
-	display: flex;
-	gap: 8px;
-	justify-content: center;
+	gap: 1rem;
 }
 
-#quit {
-	align-self: stretch;
-	border-left: 2px solid var(--transparent);
-	margin-block: -1rem;
-	padding: 0 1.5rem;
+#hud-level.show {
+	transform: translate(-50%, 0);
+	opacity: 1;
+}
+
+.level-divider {
+	height: 1.5rem;
+	width: 2px;
+	background-color: var(--white-transparent);
+	border-radius: 2px;
+}
+
+#level-wrap {
+	display: flex;
+	gap: 1.5rem;
+	align-items: center;
+	border: 2px solid var(--white-transparent);
+	border-radius: 50px;
+	padding: 9px 1.5rem;
+}
+
+#level-number {
+	font-size: 1.5rem;
+}
+
+#characters {
+	display: flex;
+	align-items: center;
+	gap: var(--gap);
+}
+
+.characters-wrap {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
 }
 
 #destruction {
-	align-items: center;
-	bottom: var(--gap);
 	display: flex;
-	pointer-events: none;
+	align-items: center;
 	gap: 1rem;
-	justify-content: center;
-	left: 50%;
-	opacity: 0;
-	position: absolute;
-	transform: translateX(-50%);
 }
 
-#destruction-bar-wrap {
+#destruction-wrap {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	width: 300px;
-}
-
-#destruction-stars {
+	gap: 8px;
 	align-items: center;
-	display: flex;
-	justify-content: space-around;
 }
 
-#destruction-bar {
-	background-color: var(--transparent);
-	border-radius: 2px;
+#destruction-wrap span {
+	width: 5rem;
+	background-color: var(--white-transparent);
 	height: 2px;
-	width: 300px;
+	border-radius: 2px;
 }
+
+/* Canvas */
 
 #webgl {
 	inset: 0;
-	opacity: 0;
 	outline: none;
 	position: fixed;
-	transition: opacity 1.5s ease;
 }
+
+/* Utility */
 
 .ui-start {
 	opacity: 0;
 	pointer-events: none;
 	transform: translateY(1rem);
-	transition: opacity var(--transition) ease, transform var(--transition) ease;
+	transition: opacity var(--duration) var(--ease), transform var(--duration) var(--ease);
 }
 
 .ui-start.show {
 	opacity: 1;
 	pointer-events: auto;
 	transform: translateY(0);
-}
-
-#loading span,
-#loaded span,
-.fs {
-	opacity: 0;
-	transition: opacity var(--transition) ease;
-}
-
-#loading span.show,
-#loaded span.show,
-.fs.active,
-#webgl.show {
-	opacity: 1;
-}
-
-#loader-bar.show,
-#zoom span.show,
-#force span.show {
-	transform: scaleX(1);
 }

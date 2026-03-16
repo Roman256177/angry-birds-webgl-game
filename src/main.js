@@ -5,60 +5,146 @@ import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
 import fontJSON from "three/examples/fonts/droid/droid_sans_regular.typeface.json";
 import gsap from "gsap";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import snowVertexShader from "./shaders/snow/vertex.glsl";
 import snowFragmentShader from "./shaders/snow/fragment.glsl";
 import textVertexShader from "./shaders/text/vertex.glsl";
 import textFragmentShader from "./shaders/text/fragment.glsl";
 
+/*-- Constants --*/
+
+const HEALTH = {
+	Pig: 80,
+	Box_Wood: 60,
+	Box_Stone: 150,
+	Box_Ice: 20,
+	Bird: 100,
+};
+
+const MASS = {
+	Pig: 2,
+	Box_Wood: 3,
+	Box_Stone: 5,
+	Box_Ice: 2,
+	Bird: 1,
+};
+
+const CONFETTI_COLORS = [
+	0xff3030, 0xffcc00, 0x00cc44, 0x4488ff, 0xff44cc, 0xffffff,
+];
+
+const DAMAGE_COLOR = new THREE.Color(0x3a0000);
+const SLINGSHOT_POS = new THREE.Vector3(50, 6, 0);
+const SHOOT_FORCE = 40;
+const MIN_IMPACT = 3;
+
+/*-- Reusable --*/
+
+const _vec3 = new THREE.Vector3();
+
+/*-- Game --*/
+
 class Game {
 	constructor() {
-		const id = (id) => document.getElementById(id);
-		const all = (sel) => document.querySelectorAll(sel);
+		this.initDOM();
+		this.initSounds();
+		this.initData();
+		this.initScene();
+		this.initPhysics();
+		this.initLoaders();
+
+		this.boundLoop = this.loop.bind(this);
+	}
+
+	initDOM() {
+		const $ = (id) => document.getElementById(id);
+		const $$ = (sel) => document.querySelectorAll(sel);
 
 		this.elements = {
-			canvas: id("webgl"),
-			loader: id("loader"),
-			loaderBar: id("loader-bar"),
-			loadings: all("#loading span"),
-			loadeds: all("#loaded span"),
-			pressEnter: id("press-enter"),
-			soundBtn: id("sound-btn"),
-			fss: all(".fs"),
-			fsBtn: id("fs-btn"),
-			uiStart: all(".ui-start"),
-			levelBtns: all(".level-btn"),
-			levelsItems: all(".levels-item"),
-			zooms: all("#zoom span"),
+			canvas: $("webgl"),
+			loader: $("loader"),
+			loaderProgress: $("loader-progress"),
+			loaderCta: $("loader-cta"),
+			labelLoadings: $$("#loader-label-loading span"),
+			labelLoadeds: $$("#loader-label-loaded span"),
+			soundBtn: $("btn-sound"),
+			fsBtn: $("btn-fs"),
+			fsIcons: $$(".icon-fs"),
+			uiStarts: $$(".ui-start"),
+			levelBtns: $$(".btn-level"),
+			zooms: $$("#hud-zoom span"),
+			forces: $$("#hud-force span"),
+			level: $("hud-level"),
 		};
+	}
+
+	initSounds() {
+		const audio = (src, volume = 1, loop = false) => {
+			const a = new Audio(src);
+			a.volume = volume;
+			a.loop = loop;
+			return a;
+		};
+
+		this.music = audio("/sounds/music.mp3", 0.35, true);
+
+		this.randomSounds = [
+			{ audio: audio("/sounds/random/crow.mp3"), min: 20000, max: 30000 },
+			{ audio: audio("/sounds/random/ice.mp3", 0.1), min: 20000, max: 40000 },
+			{ audio: audio("/sounds/random/owl.mp3"), min: 20000, max: 50000 },
+			{
+				audio: audio("/sounds/random/birds.mp3"),
+				min: 20000,
+				max: 60000,
+			},
+		];
 
 		this.sounds = {
-			ambient: new Audio("/sounds/ambient.mp3"),
-			add: {
-				bird: new Audio("/sounds/add/bird.mp3"),
-				pig: new Audio("/sounds/add/pig.mp3"),
-				box: new Audio("/sounds/add/box.mp3"),
-			},
+			bird: { add: audio("/sounds/bird/add.wav") },
+			box: { add: audio("/sounds/box/add.wav") },
+			pig: { add: audio("/sounds/pig/add.wav") },
 			ui: {
-				click: new Audio("/sounds/ui/click.wav"),
-				disabled: new Audio("/sounds/ui/disabled.wav"),
-				select: new Audio("/sounds/ui/select.wav"),
+				click: audio("/sounds/ui/click.wav"),
+				disabled: audio("/sounds/ui/disabled.wav"),
+				select: audio("/sounds/ui/select.wav"),
 			},
 		};
+	}
 
-		this.sounds.ambient.loop = true;
-		this.sounds.ambient.volume = 0.35;
-
+	initData() {
 		this.isSound = false;
-		this.isCameraMove = false;
+		this.isCamMove = false;
 		this.isLoaded = false;
 		this.isPlay = false;
 
 		this.cursor = { x: 0, y: 0 };
+		this.isDragging = false;
+		this.dragStart = { x: 0, y: 0 };
+		this.pullVector = null;
+
+		this.zoomTarget = 1;
+		this.lastActiveZoom = -1;
+		this.camTarget = new THREE.Vector3(2, 4, -6);
+		this.camTargetBase = null;
+
+		this.snow = null;
+		this.title = null;
+		this.subtitle = null;
+
+		this.levels = { 1: [], 2: [], 3: [] };
+		this.currentLevel = null;
+		this.birds = [];
+		this.pigs = [];
+		this.boxes = [];
+		this.physicsObjects = [];
+		this.activeBird = null;
+		this.activeBirdIndex = 0;
+
+		this.skyColor = new THREE.Color(0x7bb8e8);
 		this.sizes = { width: window.innerWidth, height: window.innerHeight };
 		this.prevTime = 0;
-		this.skyColor = new THREE.Color(0x7bb8e8);
+	}
 
+	initScene() {
 		this.scene = new THREE.Scene();
 		this.scene.fog = new THREE.Fog(this.skyColor, 1, 400);
 
@@ -68,99 +154,79 @@ class Game {
 			1,
 			500,
 		);
-		this.cameraTargetBase = null;
-		this.cameraTarget = new THREE.Vector3(2, 4, -6);
 		this.camera.position.set(36, 3, 40);
-		this.camera.lookAt(this.cameraTarget);
+		this.camera.lookAt(this.camTarget);
 		this.scene.add(this.camera);
-
-		this.zoomTarget = 1;
-		this.lastZoomSpan = -1;
 
 		this.renderer = new THREE.WebGLRenderer({
 			canvas: this.elements.canvas,
-			alpha: false,
 			antialias: true,
 			powerPreference: "high-performance",
-			outputColorSpace: THREE.SRGBColorSpace,
 		});
+		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 		this.renderer.shadowMap.enabled = true;
 		this.renderer.setClearColor(this.skyColor);
-		this.setRenderer();
+		this.updateRenderer();
+	}
 
+	updateRenderer() {
+		this.renderer.setSize(this.sizes.width, this.sizes.height);
+		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+	}
+
+	initPhysics() {
 		this.world = new CANNON.World({
 			gravity: new CANNON.Vec3(0, -9.82, 0),
 		});
+		this.world.broadphase = new CANNON.SAPBroadphase(this.world);
+		this.world.allowSleep = true;
+	}
 
+	initLoaders() {
 		this.loadingManager = new THREE.LoadingManager(
 			() => (this.isLoaded = true),
 		);
 		this.gltfLoader = new GLTFLoader(this.loadingManager);
 		this.fontLoader = new FontLoader(this.loadingManager);
-
-		this.snow = null;
-		this.title = null;
-		this.subtitle = null;
-
-		this.helper = {
-			birds: [],
-			pigs: [],
-			boxes: [],
-			level01: null,
-			level02: null,
-			level03: null,
-		};
-
-		//this.controls = new OrbitControls(this.camera, this.elements.canvas);
-
-		/*setInterval(() => {
-			console.log("Renderer info:");
-			console.log("Draw calls:", this.renderer.info.render.calls);
-			console.log("Triangles:", this.renderer.info.render.triangles);
-			console.log("Geometries:", this.renderer.info.memory.geometries);
-			console.log("Textures:", this.renderer.info.memory.textures);
-		}, 5000);*/
 	}
 
-	setRenderer() {
-		this.renderer.setSize(this.sizes.width, this.sizes.height);
-		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-	}
+	/*-- Entry --*/
 
 	init() {
-		this.setupLights();
-		this.setupSnow();
-		this.setupTitle();
-		this.setupEvents();
-		this.loadModel();
+		this.initLights();
+		this.initSnow();
+		this.initTitle();
+		this.initSlingshot();
+		this.initConfetti();
+		this.initEvents();
+		this.initModel();
 		this.loop();
-		this.start();
+		this.boot();
 	}
 
-	setupLights() {
-		this.scene.add(new THREE.AmbientLight(this.skyColor, 0.45));
+	initLights() {
+		this.scene.add(new THREE.AmbientLight(this.skyColor, 0.5));
+
 		const sun = new THREE.DirectionalLight(0xfff5c2, 0.9);
 		sun.position.set(80, 60, -40);
 		sun.castShadow = true;
-		sun.shadow.mapSize.set(1024, 1024);
+		sun.shadow.mapSize.set(2048, 2048);
 		sun.shadow.camera.near = 20;
 		sun.shadow.camera.far = 250;
 		sun.shadow.camera.right = 180;
 		sun.shadow.camera.left = -100;
 		sun.shadow.camera.top = 100;
 		sun.shadow.camera.bottom = -50;
-		sun.shadow.bias = -0.005;
-		sun.shadow.normalBias = 0.05;
+		sun.shadow.bias = -0.002;
+		sun.shadow.normalBias = 0.02;
 		sun.shadow.radius = 2;
 		this.scene.add(sun);
 	}
 
-	setupSnow() {
+	initSnow() {
 		const count = 2000;
 		const area = 300;
 		const height = 100;
-
-		const geometry = new THREE.BufferGeometry();
 		const positions = new Float32Array(count * 3);
 		const speeds = new Float32Array(count);
 		const winds = new Float32Array(count);
@@ -175,26 +241,28 @@ class Game {
 			sizes[i] = 1 + Math.random();
 		}
 
+		const geometry = new THREE.BufferGeometry();
 		geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 		geometry.setAttribute("aSpeed", new THREE.BufferAttribute(speeds, 1));
 		geometry.setAttribute("aWind", new THREE.BufferAttribute(winds, 1));
 		geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
 
-		const material = new THREE.ShaderMaterial({
-			precision: "lowp",
-			uniforms: { uTime: { value: 0 } },
-			vertexShader: snowVertexShader,
-			fragmentShader: snowFragmentShader,
-			depthWrite: false,
-			transparent: true,
-		});
-
-		this.snow = new THREE.Points(geometry, material);
+		this.snow = new THREE.Points(
+			geometry,
+			new THREE.ShaderMaterial({
+				precision: "lowp",
+				uniforms: { uTime: { value: 0 } },
+				vertexShader: snowVertexShader,
+				fragmentShader: snowFragmentShader,
+				depthWrite: false,
+				transparent: true,
+			}),
+		);
 		this.snow.frustumCulled = false;
 		this.scene.add(this.snow);
 	}
 
-	setupTitle() {
+	initTitle() {
 		const group = new THREE.Group();
 		group.rotation.y = Math.PI * 0.5;
 		group.position.set(-400, 160, 0);
@@ -202,139 +270,280 @@ class Game {
 
 		const font = this.fontLoader.parse(fontJSON);
 
-		const subtitleGeo = new TextGeometry("* Christmas Edition *", {
-			font,
-			size: 8,
-			depth: 0,
-			curveSegments: 1,
-		});
-		const subtitleMat = new THREE.MeshBasicMaterial({
-			color: this.skyColor,
-			fog: false,
-		});
-		this.subtitle = new THREE.Mesh(subtitleGeo, subtitleMat);
+		this.subtitle = new THREE.Mesh(
+			new TextGeometry("* Christmas Edition *", {
+				font,
+				size: 8,
+				depth: 0,
+				curveSegments: 1,
+			}),
+			new THREE.MeshBasicMaterial({ color: this.skyColor, fog: false }),
+		);
 		this.subtitle.position.set(-115, 45, 0);
 		group.add(this.subtitle);
 
-		const titleGeo = new TextGeometry("Angry Birds", {
+		const geometry = new TextGeometry("Angry Birds", {
 			font,
-			size: 44,
+			size: 43,
 			depth: 0,
 			curveSegments: 1,
 		});
-		titleGeo.computeBoundingBox();
-		titleGeo.translate(
-			-(titleGeo.boundingBox.max.x - titleGeo.boundingBox.min.x) * 0.5,
+		geometry.computeBoundingBox();
+		geometry.translate(
+			-(geometry.boundingBox.max.x - geometry.boundingBox.min.x) * 0.5,
 			0,
 			0,
 		);
-		const titleMat = new THREE.ShaderMaterial({
-			precision: "lowp",
-			uniforms: { uFade: { value: 0 } },
-			vertexShader: textVertexShader,
-			fragmentShader: textFragmentShader,
-			transparent: true,
-		});
-		this.title = new THREE.Mesh(titleGeo, titleMat);
+
+		this.title = new THREE.Mesh(
+			geometry,
+			new THREE.ShaderMaterial({
+				precision: "lowp",
+				uniforms: { uFade: { value: 0 } },
+				vertexShader: textVertexShader,
+				fragmentShader: textFragmentShader,
+				transparent: true,
+			}),
+		);
 		group.add(this.title);
 	}
-	//
-	loadModel() {
-		this.gltfLoader.load("/models/angrybirds.glb", (gltf) => {
-			const root = gltf.scene.children[0];
-			root.traverse((obj) => {
-				if (obj.name === "Level01") {
-					this.helper.level01 = obj;
-					obj.children.forEach((child) => {
-						if (child.name.includes("Bird")) this.helper.birds.push(child);
-						else if (child.name.includes("Pig")) this.helper.pigs.push(child);
-						else if (child.name.includes("Box")) this.helper.boxes.push(child);
-					});
-					obj.remove(...obj.children);
+
+	initSlingshot() {
+		/*const mat = new THREE.LineBasicMaterial({ color: 0x8b4513, linewidth: 2 });
+
+		const leftGeo = new THREE.BufferGeometry().setFromPoints([
+			SLING_LEFT,
+			SLINGSHOT_POS,
+		]);
+		const rightGeo = new THREE.BufferGeometry().setFromPoints([
+			SLING_RIGHT,
+			SLINGSHOT_POS,
+		]);
+
+		this.slingLeft = new THREE.Line(leftGeo, mat);
+		this.slingRight = new THREE.Line(rightGeo, mat);
+
+		this.scene.add(this.slingLeft, this.slingRight);*/
+	}
+
+	initConfetti() {
+		/*this.confettiGeo = new THREE.PlaneGeometry(0.3, 0.3);
+		this.confettiMats = CONFETTI_COLORS.map(
+			(c) => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }),
+		);*/
+	}
+
+	initEvents() {
+		window.addEventListener("resize", () => this.onResize());
+		document.addEventListener("mousemove", (e) => this.onMouseMove(e));
+		window.addEventListener("mousedown", (e) => this.onMouseDown(e));
+		window.addEventListener("mouseup", () => this.onMouseUp());
+		window.addEventListener("wheel", (e) => this.onWheel(e), {
+			passive: true,
+		});
+		document.addEventListener("visibilitychange", () => {
+			if (document.hidden) this.soundOff();
+			else if (this.isSound) this.soundOn();
+		});
+
+		this.elements.fsBtn.addEventListener("click", () => {
+			if (document.fullscreenElement) document.exitFullscreen();
+			else document.documentElement.requestFullscreen();
+			this.elements.fsIcons.forEach((el) => el.classList.toggle("active"));
+			this.playSound(this.sounds.ui.click);
+		});
+
+		this.elements.soundBtn.addEventListener("click", () => {
+			this.toggleSound();
+			this.playSound(this.sounds.ui.click);
+		});
+
+		this.elements.levelBtns.forEach((btn) => {
+			btn.addEventListener("mouseenter", () => {
+				if (!btn.classList.contains("locked"))
+					this.playSound(this.sounds.ui.select);
+			});
+			btn.addEventListener("click", () => {
+				if (btn.classList.contains("locked")) {
+					this.playSound(this.sounds.ui.disabled);
 					return;
 				}
+				this.playSound(this.sounds.ui.click);
+				this.setupLevel(parseInt(btn.dataset.level));
+			});
+		});
+	}
+
+	onResize() {
+		this.sizes.width = window.innerWidth;
+		this.sizes.height = window.innerHeight;
+		this.camera.aspect = this.sizes.width / this.sizes.height;
+		this.camera.updateProjectionMatrix();
+		this.updateRenderer();
+	}
+
+	onMouseMove(e) {
+		if (this.isCamMove) {
+			this.cursor.x = e.clientX / this.sizes.width - 0.5;
+			this.cursor.y = e.clientY / this.sizes.height - 0.5;
+		}
+		if (this.isDragging && this.activeBird) {
+			this.pullVector = {
+				x: (e.clientX - this.dragStart.x) / this.sizes.width,
+				y: (e.clientY - this.dragStart.y) / this.sizes.height,
+			};
+		}
+	}
+
+	onMouseDown(e) {
+		if (!this.isPlay || !this.activeBird) return;
+		this.isDragging = true;
+		this.dragStart = { x: e.clientX, y: e.clientY };
+		this.pullVector = null;
+	}
+
+	onMouseUp() {
+		if (!this.isDragging) return;
+		this.isDragging = false;
+		if (
+			this.pullVector &&
+			Math.hypot(this.pullVector.x, this.pullVector.y) > 0.02
+		) {
+			this._shootBird(this.pullVector);
+		}
+		this.pullVector = null;
+	}
+
+	onWheel(e) {
+		if (!this.isCamMove) return;
+		this.zoomTarget += e.deltaY * -0.001;
+		this.zoomTarget = Math.min(Math.max(this.zoomTarget, 1), 4);
+	}
+
+	playSound(sound) {
+		if (!this.isSound || document.hidden) return;
+		sound.currentTime = 0;
+		sound.play();
+	}
+
+	toggleSound() {
+		this.isSound = !this.isSound;
+		this.isSound ? this.soundOn() : this.soundOff();
+		this.elements.soundBtn.classList.toggle("active", this.isSound);
+	}
+
+	soundOn() {
+		this.music.play();
+	}
+
+	soundOff() {
+		this.music.pause();
+		this.randomSounds.forEach((s) => s.audio.pause());
+	}
+
+	initRandomSounds() {
+		this.randomSounds.forEach((s) => {
+			const play = () =>
+				setTimeout(
+					() => {
+						if (this.isSound && !document.hidden) s.audio.play();
+						play();
+					},
+					s.min + Math.random() * (s.max - s.min),
+				);
+			play();
+		});
+	}
+
+	initModel() {
+		this.gltfLoader.load("/models/angrybirds.glb", (gltf) => {
+			const root = gltf.scene.children[0];
+
+			const take = (name) => {
+				const obj = root.getObjectByName(name);
+				root.remove(obj);
+				return obj;
+			};
+
+			this.levels[1] = [...take("Level_1").children];
+			this.levels[2] = [...take("Level_2").children];
+			this.levels[3] = [...take("Level_3").children];
+			this.birds = [...take("Birds").children];
+
+			root.traverse((obj) => {
 				if (!obj.isMesh) return;
 
-				const mats = Array.isArray(obj.material)
-					? obj.material
-					: [obj.material];
-				mats.forEach((m) => {
+				[obj.material].flat().forEach((m) => {
 					m.flatShading = true;
 					m.needsUpdate = true;
 				});
 
 				if (obj.name === "Ground") {
 					obj.receiveShadow = true;
-					const groundShape = new CANNON.Plane();
-					const groundBody = new CANNON.Body({ shape: groundShape });
-					groundBody.quaternion.setFromEuler(-Math.PI * 0.5, 0, 0);
-					this.world.addBody(groundBody);
-				} else {
-					obj.castShadow = true;
-					obj.receiveShadow = true;
+					const body = new CANNON.Body({ shape: new CANNON.Plane() });
+					body.quaternion.setFromEuler(-Math.PI * 0.5, 0, 0);
+					this.world.addBody(body);
+					return;
 				}
+
+				obj.castShadow = true;
+				obj.receiveShadow = true;
 			});
 
 			this.scene.add(root);
 		});
 	}
 
-	async start() {
-		this.stagger(this.elements.loadings, true);
+	async boot() {
+		this.stagger(this.elements.labelLoadings, true);
 		await this.wait(500);
-		this.toggleClass(this.elements.loaderBar, "show", true);
+		this.elements.loaderProgress.classList.add("show");
 
+		await this.wait(1000);
+		this.setProgress(0.33);
 		await this.wait(1500);
-		this.setLoadingProgress(0.33);
-		await this.wait(1500);
-		this.setLoadingProgress(0.66);
-		await this.wait(1500);
+		this.setProgress(0.66);
+		await this.wait(1000);
 
 		while (!this.isLoaded) await this.wait(50);
 
-		this.setLoadingProgress(1);
-		this.stagger(this.elements.loadings, false);
+		this.setProgress(1);
+		this.stagger(this.elements.labelLoadings, false);
 		await this.wait(500);
 
-		this.stagger(this.elements.loadeds, true);
+		this.stagger(this.elements.labelLoadeds, true);
 		await this.wait(1000);
 
-		this.toggleClass(this.elements.pressEnter, "show", true);
+		this.elements.loaderCta.classList.add("show");
 		await this.waitForEnter();
-		this.toggleClass(this.elements.pressEnter, "show", false);
-		this.toggleClass(this.elements.loaderBar, "show", false);
-		this.stagger(this.elements.loadeds, false);
+		this.elements.loaderCta.classList.remove("show");
+		this.elements.loaderProgress.classList.remove("show");
+		this.stagger(this.elements.labelLoadeds, false);
 
 		await this.wait(500);
+		this.elements.loader.classList.add("end");
+		await this.animateCamera(60, 4, 0, 0, 11, 0);
 		this.elements.loader.classList.add("remove");
-		this.elements.canvas.classList.add("show");
 
-		await this.animateCamera(60, 6, 0, 0, 12, 0);
 		await this.showTitle();
+		this.enableCamMove(true);
+		this.stagger(this.elements.uiStarts, true, 50);
+	}
 
-		this.enableCameraMove(true);
-		this.stagger(this.elements.uiStart, true, 50);
+	async stagger(elements, show, delay = 25) {
+		const n = elements.length;
+		for (let i = 0; i < n; i++) {
+			elements[show ? i : n - 1 - i].classList.toggle("show", show);
+			await this.wait(delay);
+		}
 	}
 
 	wait(ms) {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
 
-	async stagger(elements, bool, delay = 25) {
-		const n = elements.length;
-		for (let i = 0; i < n; i++) {
-			const index = bool ? i : n - 1 - i;
-			elements[index].classList.toggle("show", bool);
-			await this.wait(delay);
-		}
-	}
-
-	toggleClass(element, name, bool) {
-		element.classList.toggle(name, bool);
-	}
-
-	setLoadingProgress(value) {
-		this.elements.loaderBar.style.setProperty("--s", value);
+	setProgress(value) {
+		this.elements.loaderProgress.style.setProperty("--s", value);
 	}
 
 	waitForEnter() {
@@ -343,6 +552,8 @@ class Game {
 				if (e.code !== "Enter" || e.repeat) return;
 				document.removeEventListener("keydown", onKey);
 				this.toggleSound();
+				this.initRandomSounds();
+				this.playSound(this.sounds.ui.click);
 				resolve();
 			};
 			document.addEventListener("keydown", onKey);
@@ -358,210 +569,376 @@ class Game {
 				0,
 			);
 			tl.to(
-				this.cameraTarget,
+				this.camTarget,
 				{
 					x: tarX,
 					y: tarY,
 					z: tarZ,
 					duration: 3,
 					ease: "power1.inOut",
-					onUpdate: () => this.camera.lookAt(this.cameraTarget),
+					onUpdate: () => this.camera.lookAt(this.camTarget),
 				},
 				0,
 			);
 		});
 	}
 
-	enableCameraMove(bool) {
-		this.isCameraMove = bool;
-		if (bool) this.cameraTargetBase = this.cameraTarget.clone();
-	}
-
-	showTitle() {
+	showTitle(show = true) {
 		return new Promise((resolve) => {
 			const tl = gsap.timeline({ onComplete: resolve });
 			tl.to(
 				this.title.material.uniforms.uFade,
-				{ value: 1, duration: 1.5, ease: "power1.inOut" },
+				{ value: show ? 1 : 0, duration: 1.5, ease: "power1.inOut" },
 				0,
 			);
 			tl.to(
 				this.subtitle.material.color,
-				{ r: 1, g: 1, b: 1, duration: 1.5, ease: "power1.inOut" },
+				{
+					r: show ? 1 : this.skyColor.r,
+					g: show ? 1 : this.skyColor.g,
+					b: show ? 1 : this.skyColor.b,
+					duration: 1.5,
+					ease: "power1.inOut",
+				},
 				0,
 			);
 			tl.to(
 				this.subtitle.position,
-				{ y: 40, duration: 1.5, ease: "power1.inOut" },
+				{ y: show ? 40 : 45, duration: 1.5, ease: "power1.inOut" },
 				0,
 			);
 		});
 	}
 
-	//
-	async setLevel() {
-		this.enableCameraMove(false);
-		await this.spawnObjects(this.helper.birds, "bird");
-		await this.animateCamera(10, 20, -30, -30, 0, 10);
-		await this.spawnObjects(this.helper.boxes, "box");
-		await this.spawnObjects(this.helper.pigs, "pig");
-		await this.animateCamera(50, 12, 0, 0, 4, 0);
-		this.initGameLoop();
+	enableCamMove(enabled) {
+		this.isCamMove = enabled;
+		if (enabled) this.camTargetBase = this.camTarget.clone();
 	}
 
-	async spawnObjects(objs, type) {
-		for (const obj of objs) {
-			obj.position.y += 2;
-			obj.scale.set(0.2, 0.2, 0.2);
-			this.helper.level01.add(obj);
+	/*-- Level --*/
 
-			gsap.to(obj.position, {
-				y: obj.position.y - 2,
-				duration: 0.75,
-				ease: "bounce.out",
-			});
+	async setupLevel(id) {
+		this.toggleUi(false);
+		this.showTitle(false);
+		this.enableCamMove(false);
+		await this.animateCamera(50, 13, 0, 0, 6, 0);
+		this.enableCamMove(true);
+
+		/*
+		this._showLevelUi();
+		this._enableCameraMove(false);
+
+		this.currentLevel = id;
+		this.activeBirdIndex = 0;
+		this.activeBird = null;
+		this.pigs = [];
+		this.boxes = [];
+
+		const spawnObj = (obj, type, i) => {
+			obj.userData.dead = false;
+			obj.userData.health = HEALTH[type];
+			obj.castShadow = true;
+			obj.receiveShadow = true;
+			obj.scale.set(0, 0, 0);
+			this.scene.add(obj);
+			//this._createBody(obj, type);
 			gsap.to(obj.scale, {
 				x: 1,
 				y: 1,
 				z: 1,
-				duration: 0.75,
-				ease: "back.out(1.5)",
+				duration: 0.5,
+				delay: i * 0.1,
+				ease: "back.out(1.7)",
+				onStart: () =>
+					this._playSound(
+						this.sounds[
+							type === "Pig" ? "pig" : type.startsWith("Bird") ? "bird" : "box"
+						].add,
+					),
+			});
+		};
+
+		this.levels[id].forEach((obj, i) => {
+			const type = this._getType(obj.name);
+			if (type === "Pig") this.pigs.push(obj);
+			else this.boxes.push(obj);
+			spawnObj(obj, type, i);
+		});
+
+		this.birds.forEach((bird, i) => {
+			spawnObj(bird, "Bird", i);
+		});
+
+		this.physicsObjects = [...this.birds, ...this.pigs, ...this.boxes];
+
+		await this._animateCamera(50, 10, 0, 0, 8, 0);
+		this._enableCameraMove(true);
+		//this._prepareBird();
+		this.isPlay = true;*/
+	}
+
+	toggleUi(home) {
+		this.stagger(this.elements.levelBtns, home, 50);
+		this.stagger(this.elements.forces, !home, 50);
+		this.elements.level.classList.toggle("show", !home);
+	}
+
+	_getType(name) {
+		if (name.startsWith("Pig")) return "Pig";
+		if (name.startsWith("Box_Stone")) return "Box_Stone";
+		if (name.startsWith("Box_Wood")) return "Box_Wood";
+		if (name.startsWith("Box_Ice")) return "Box_Ice";
+		if (name.startsWith("Bird")) return "Bird";
+		return null;
+	}
+
+	/*-- Physics --*/
+
+	_createBody(obj, type) {
+		if (obj.userData.body) {
+			this.world.removeBody(obj.userData.body);
+			obj.userData.body = null;
+		}
+
+		obj.geometry.computeBoundingBox();
+		obj.geometry.boundingBox.getSize(_vec3);
+
+		const isSphere = type === "Pig" || type === "Bird";
+		const shape = isSphere
+			? new CANNON.Sphere(_vec3.x * 0.5)
+			: new CANNON.Box(
+					new CANNON.Vec3(_vec3.x * 0.5, _vec3.y * 0.5, _vec3.z * 0.5),
+				);
+
+		const body = new CANNON.Body({
+			mass: MASS[type],
+			shape,
+			linearDamping: 0.3,
+			angularDamping: 0.3,
+		});
+
+		obj.getWorldPosition(_vec3);
+		body.position.set(_vec3.x, _vec3.y, _vec3.z);
+		body.allowSleep = true;
+		body.sleepSpeedLimit = 0.5;
+		body.sleepTimeLimit = 1.0;
+
+		obj.userData.body = body;
+		obj.userData.health = HEALTH[type];
+		obj.userData.type = type;
+		obj.userData.dead = false;
+		body.userData = { obj };
+
+		body.addEventListener("collide", (e) => {
+			const impact = e.contact.getImpactVelocityAlongNormal();
+			if (Math.abs(impact) < MIN_IMPACT) return;
+			const dmg = Math.abs(impact) * 2;
+			this._damage(obj, dmg);
+			if (e.body.userData?.obj) this._damage(e.body.userData.obj, dmg * 0.5);
+		});
+
+		this.world.addBody(body);
+	}
+
+	_damage(obj, amount) {
+		if (!obj.userData.health || obj.userData.dead) return;
+		obj.userData.health -= amount;
+
+		const ratio = Math.max(0, obj.userData.health / HEALTH[obj.userData.type]);
+		[obj.material].flat().forEach((m) => {
+			if (m.color) m.color.lerp(DAMAGE_COLOR, 1 - ratio);
+		});
+
+		if (obj.userData.health <= 0) this._destroy(obj);
+	}
+
+	_destroy(obj) {
+		if (obj.userData.dead) return;
+		obj.userData.dead = true;
+
+		obj.getWorldPosition(_vec3);
+		this._spawnConfetti(_vec3);
+
+		gsap.to(obj.scale, {
+			x: 0,
+			y: 0,
+			z: 0,
+			duration: 0.3,
+			ease: "back.in(2)",
+			onComplete: () => {
+				obj.visible = false;
+				this.world.removeBody(obj.userData.body);
+			},
+		});
+
+		this.pigs = this.pigs.filter((o) => o !== obj);
+		this.boxes = this.boxes.filter((o) => o !== obj);
+		this.physicsObjects = this.physicsObjects.filter((o) => o !== obj);
+
+		this._checkEndCondition();
+	}
+
+	_spawnConfetti(position) {
+		for (let i = 0; i < 20; i++) {
+			const mat =
+				this.confettiMats[Math.floor(Math.random() * this.confettiMats.length)];
+			const mesh = new THREE.Mesh(this.confettiGeo, mat);
+			mesh.position.copy(position);
+			mesh.rotation.set(
+				Math.random() * Math.PI,
+				Math.random() * Math.PI,
+				Math.random() * Math.PI,
+			);
+			this.scene.add(mesh);
+
+			const vx = (Math.random() - 0.5) * 10;
+			const vy = 5 + Math.random() * 8;
+			const vz = (Math.random() - 0.5) * 10;
+
+			gsap.to(mesh.position, {
+				x: mesh.position.x + vx,
+				y: mesh.position.y + vy,
+				z: mesh.position.z + vz,
+				duration: 0.4,
+				ease: "power2.out",
+				onComplete: () => {
+					gsap.to(mesh.position, {
+						y: mesh.position.y - 20,
+						duration: 1.2,
+						ease: "power1.in",
+						onComplete: () => this.scene.remove(mesh),
+					});
+				},
 			});
 
-			this.playSound(this.sounds.add[type]);
-			await this.wait(100 + Math.random() * 100);
+			gsap.to(mesh.rotation, {
+				x: mesh.rotation.x + Math.random() * Math.PI * 4,
+				y: mesh.rotation.y + Math.random() * Math.PI * 4,
+				duration: 1.6,
+				ease: "none",
+			});
 		}
 	}
 
-	initGameLoop() {}
+	/*-- Bird --*/
 
-	setupEvents() {
-		window.addEventListener("resize", () => {
-			this.sizes.width = window.innerWidth;
-			this.sizes.height = window.innerHeight;
-			this.camera.aspect = this.sizes.width / this.sizes.height;
-			this.camera.updateProjectionMatrix();
-			this.setRenderer();
+	_prepareBird() {
+		if (this.activeBirdIndex >= this.birds.length) return;
+
+		const bird = this.birds[this.activeBirdIndex];
+		this.scene.add(bird);
+		bird.visible = true;
+		bird.scale.set(0, 0, 0);
+		bird.position.copy(SLINGSHOT_POS);
+
+		if (!bird.userData.body) this._createBody(bird, "Bird");
+
+		const body = bird.userData.body;
+		body.mass = 0;
+		body.updateMassProperties();
+		body.position.set(SLINGSHOT_POS.x, SLINGSHOT_POS.y, SLINGSHOT_POS.z);
+		body.velocity.set(0, 0, 0);
+		body.angularVelocity.set(0, 0, 0);
+
+		gsap.to(bird.scale, {
+			x: 1,
+			y: 1,
+			z: 1,
+			duration: 0.4,
+			ease: "back.out(2)",
 		});
 
-		document.addEventListener("mousemove", (e) => {
-			if (!this.isCameraMove) return;
-			this.cursor.x = e.clientX / this.sizes.width - 0.5;
-			this.cursor.y = e.clientY / this.sizes.height - 0.5;
-		});
-
-		window.addEventListener("wheel", (e) => {
-			if (!this.isCameraMove) return;
-			this.zoomTarget += e.deltaY * -0.001;
-			this.zoomTarget = Math.min(Math.max(this.zoomTarget, 1), 4);
-		});
-
-		document.addEventListener("visibilitychange", () => {
-			if (document.hidden) {
-				this.sounds.ambient.pause();
-			} else if (this.isSound) {
-				this.sounds.ambient.play();
-			}
-		});
-
-		this.elements.fsBtn.addEventListener("click", () => {
-			if (document.fullscreenElement || document.webkitFullscreenElement) {
-				document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-			} else {
-				document.documentElement.requestFullscreen?.() ||
-					document.documentElement.webkitRequestFullscreen?.();
-			}
-			this.elements.fss.forEach((el) => el.classList.toggle("active"));
-			this.playSound(this.sounds.ui.click);
-		});
-
-		this.elements.soundBtn.addEventListener("click", () => {
-			this.toggleSound();
-			this.playSound(this.sounds.ui.click);
-		});
-
-		this.elements.levelBtns.forEach((btn) => {
-			btn.addEventListener("mouseenter", () => {
-				if (!btn.classList.contains("locked"))
-					this.playSound(this.sounds.ui.select);
-			});
-
-			btn.addEventListener("click", () => {
-				if (btn.classList.contains("locked")) {
-					this.playSound(this.sounds.ui.disabled);
-				} else {
-					this.playSound(this.sounds.ui.click);
-					this.setLevel(parseInt(btn.dataset.level));
-					this.stagger(this.elements.levelsItems, false, 50);
-				}
-			});
-		});
+		this.activeBird = bird;
+		this._playSound(this.sounds.bird.add);
 	}
 
-	playSound(sound) {
-		if (!this.isSound) return;
-		sound.currentTime = 0;
-		sound.play();
+	_shootBird(pull) {
+		if (!this.activeBird) return;
+
+		const body = this.activeBird.userData.body;
+		body.mass = MASS.Bird;
+		body.updateMassProperties();
+		body.wakeUp();
+		body.applyImpulse(
+			new CANNON.Vec3(-pull.x * SHOOT_FORCE, -pull.y * SHOOT_FORCE, 0),
+			body.position,
+		);
+
+		this.activeBird = null;
+		this.activeBirdIndex++;
+
+		setTimeout(() => {
+			if (this.activeBirdIndex < this.birds.length) this._prepareBird();
+			else this._checkEndCondition();
+		}, 2000);
 	}
 
-	toggleSound() {
-		this.isSound = !this.isSound;
-		if (this.isSound) {
-			if (this.sounds.ambient.paused) this.sounds.ambient.play();
-		} else {
-			this.sounds.ambient.pause();
+	_checkEndCondition() {
+		if (this.pigs.length === 0) {
+			const bonus = this.birds.length - this.activeBirdIndex;
+			console.log(`Win! Bonus birds: ${bonus}`);
+			// TODO: show win UI
+		} else if (this.activeBirdIndex >= this.birds.length) {
+			console.log("Out of birds.");
+			// TODO: show lose UI
 		}
-		this.elements.soundBtn.classList.toggle("active", this.isSound);
 	}
+
+	/*-- Loop --*/
 
 	loop(time = 0) {
-		requestAnimationFrame(this.loop.bind(this));
+		requestAnimationFrame(this.boundLoop);
 
-		const delta = Math.min((time - this.prevTime) / 1000, 0.1);
+		const delta = Math.min((time - this.prevTime) / 1000, 0.05);
 		this.prevTime = time;
 
-		if (this.snow) this.snow.material.uniforms.uTime.value = time / 1000;
+		this.snow.material.uniforms.uTime.value = time / 1000;
 
-		if (this.isCameraMove) {
-			const lerpSpeed = 5 * delta;
+		if (this.isCamMove) this.updateCamera(delta);
+		if (this.isPlay) this.updatePhysics(delta);
 
-			this.camera.zoom += (this.zoomTarget - this.camera.zoom) * lerpSpeed;
-			this.camera.updateProjectionMatrix();
-
-			const normalizedZoom = (this.camera.zoom - 1) / 3;
-			const zoomFactor = 1 + normalizedZoom * 3;
-			const targetZ = this.cameraTargetBase.z - this.cursor.x * zoomFactor * 10;
-			const targetY = this.cameraTargetBase.y - this.cursor.y * zoomFactor * 5;
-
-			this.cameraTarget.z += (targetZ - this.cameraTarget.z) * lerpSpeed;
-			this.cameraTarget.y += (targetY - this.cameraTarget.y) * lerpSpeed;
-			this.camera.lookAt(this.cameraTarget);
-
-			const active = Math.round(normalizedZoom * this.elements.zooms.length);
-			if (active !== this.lastZoomSpan) {
-				this.elements.zooms.forEach((z, i) =>
-					z.classList.toggle("active", i < active),
-				);
-				this.lastZoomSpan = active;
-			}
-		}
-		//
-		if (this.isPlay) {
-			this.world.step(1 / 60, delta, 3);
-			[...this.helper.birds, ...this.helper.pigs, ...this.helper.boxes].forEach(
-				(obj) => {
-					const body = obj.userData.physicsBody;
-					if (body) {
-						obj.position.copy(body.position);
-						obj.quaternion.copy(body.quaternion);
-					}
-				},
-			);
-		}
-
-		//this.controls.update();
-
+		this.renderer.shadowMap.needsUpdate = this.isPlay;
 		this.renderer.render(this.scene, this.camera);
+	}
+
+	updateCamera(delta) {
+		const lerpSpeed = 5 * delta;
+
+		const zoom =
+			this.camera.zoom + (this.zoomTarget - this.camera.zoom) * lerpSpeed;
+		if (Math.abs(zoom - this.camera.zoom) > 0.0001) {
+			this.camera.zoom = zoom;
+			this.camera.updateProjectionMatrix();
+		}
+
+		const normalized = (this.camera.zoom - 1) / 3;
+		const factor = 1 + normalized * 3;
+
+		const targetZ = this.camTargetBase.z - this.cursor.x * factor * 10;
+		const targetY = this.camTargetBase.y - this.cursor.y * factor * 5;
+
+		this.camTarget.z += (targetZ - this.camTarget.z) * lerpSpeed;
+		this.camTarget.y += (targetY - this.camTarget.y) * lerpSpeed;
+		this.camera.lookAt(this.camTarget);
+
+		const active = Math.round(normalized * 9);
+		if (active !== this.lastActiveZoom) {
+			this.elements.zooms.forEach((z, i) =>
+				z.classList.toggle("active", i < active),
+			);
+			this.lastActiveZoom = active;
+		}
+	}
+
+	updatePhysics(delta) {
+		this.world.step(1 / 60, delta, 3);
+
+		for (const obj of this.physicsObjects) {
+			const body = obj.userData.body;
+			if (!body || body.sleepState === CANNON.Body.SLEEPING) continue;
+			obj.position.copy(body.position);
+			obj.quaternion.copy(body.quaternion);
+		}
 	}
 }
 
