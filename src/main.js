@@ -7,46 +7,15 @@ import fontJSON from "three/examples/fonts/droid/droid_sans_regular.typeface.jso
 import gsap from "gsap";
 import snowVertexShader from "./shaders/snow/vertex.glsl";
 import snowFragmentShader from "./shaders/snow/fragment.glsl";
-import textVertexShader from "./shaders/text/vertex.glsl";
-import textFragmentShader from "./shaders/text/fragment.glsl";
-
-/*-- Constants --*/
-
-const HEALTH = {
-	Pig: 80,
-	Box_Wood: 60,
-	Box_Stone: 150,
-	Box_Ice: 20,
-	Bird: 100,
-};
-
-const MASS = {
-	Pig: 2,
-	Box_Wood: 3,
-	Box_Stone: 5,
-	Box_Ice: 2,
-	Bird: 1,
-};
-
-const CONFETTI_COLORS = [
-	0xff3030, 0xffcc00, 0x00cc44, 0x4488ff, 0xff44cc, 0xffffff,
-];
-
-const DAMAGE_COLOR = new THREE.Color(0x3a0000);
-const SLINGSHOT_POS = new THREE.Vector3(50, 6, 0);
-const SHOOT_FORCE = 40;
-const MIN_IMPACT = 3;
-
-/*-- Reusable --*/
-
-const _vec3 = new THREE.Vector3();
+import titleVertexShader from "./shaders/title/vertex.glsl";
+import titleFragmentShader from "./shaders/title/fragment.glsl";
 
 /*-- Game --*/
 
 class Game {
 	constructor() {
 		this.initDOM();
-		this.initSounds();
+		this.initSound();
 		this.initData();
 		this.initScene();
 		this.initPhysics();
@@ -63,21 +32,24 @@ class Game {
 			canvas: $("webgl"),
 			loader: $("loader"),
 			loaderProgress: $("loader-progress"),
-			loaderCta: $("loader-cta"),
-			labelLoadings: $$("#loader-label-loading span"),
-			labelLoadeds: $$("#loader-label-loaded span"),
-			soundBtn: $("btn-sound"),
-			fsBtn: $("btn-fs"),
-			fsIcons: $$(".icon-fs"),
-			uiStarts: $$(".ui-start"),
+			loaderInner: $("loader-inner"),
+			loaderText: $("loader-text"),
+			loaderPercent: $("loader-percent"),
+			loaderClick: $("loader-click"),
+			nav: $("nav"),
 			levelBtns: $$(".btn-level"),
-			zooms: $$("#hud-zoom span"),
-			forces: $$("#hud-force span"),
-			level: $("hud-level"),
+			soundBtn: $("btn-sound"),
+			fullscreenBtn: $("btn-fullscreen"),
+			fsIcons: $$(".icon-fs"),
+			zoomSpans: $$("#zoom span"),
+			powerSpans: $$("#power span"),
+			closeBtn: $("btn-close"),
+			homes: $$(".home"),
+			levels: $$(".level"),
 		};
 	}
 
-	initSounds() {
+	initSound() {
 		const audio = (src, volume = 1, loop = false) => {
 			const a = new Audio(src);
 			a.volume = volume;
@@ -85,27 +57,21 @@ class Game {
 			return a;
 		};
 
-		this.music = audio("/sounds/music.mp3", 0.35, true);
-
-		this.randomSounds = [
-			{ audio: audio("/sounds/random/crow.mp3"), min: 20000, max: 30000 },
-			{ audio: audio("/sounds/random/ice.mp3", 0.1), min: 20000, max: 40000 },
-			{ audio: audio("/sounds/random/owl.mp3"), min: 20000, max: 50000 },
-			{
-				audio: audio("/sounds/random/birds.mp3"),
-				min: 20000,
-				max: 60000,
-			},
-		];
-
 		this.sounds = {
+			music: audio("/sounds/music.mp3", 0.3, true),
+			random: [
+				{ audio: audio("/sounds/random/crow.mp3") },
+				{ audio: audio("/sounds/random/ice.mp3", 0.1) },
+				{ audio: audio("/sounds/random/owl.mp3") },
+				{ audio: audio("/sounds/random/birds.mp3") },
+			],
 			bird: { add: audio("/sounds/bird/add.wav") },
 			box: { add: audio("/sounds/box/add.wav") },
 			pig: { add: audio("/sounds/pig/add.wav") },
 			ui: {
 				click: audio("/sounds/ui/click.wav"),
 				disabled: audio("/sounds/ui/disabled.wav"),
-				select: audio("/sounds/ui/select.wav"),
+				hover: audio("/sounds/ui/hover.wav"),
 			},
 		};
 	}
@@ -139,7 +105,7 @@ class Game {
 		this.activeBird = null;
 		this.activeBirdIndex = 0;
 
-		this.skyColor = new THREE.Color(0x7bb8e8);
+		this.skyColor = new THREE.Color(0x72b4ec);
 		this.sizes = { width: window.innerWidth, height: window.innerHeight };
 		this.prevTime = 0;
 	}
@@ -205,17 +171,17 @@ class Game {
 	}
 
 	initLights() {
-		this.scene.add(new THREE.AmbientLight(this.skyColor, 0.5));
+		this.scene.add(new THREE.AmbientLight(0xc8dff0, 0.45));
 
 		const sun = new THREE.DirectionalLight(0xfff5c2, 0.9);
-		sun.position.set(80, 60, -40);
+		sun.position.set(80, 50, -40);
 		sun.castShadow = true;
 		sun.shadow.mapSize.set(2048, 2048);
-		sun.shadow.camera.near = 20;
-		sun.shadow.camera.far = 250;
+		sun.shadow.camera.near = 10;
+		sun.shadow.camera.far = 260;
 		sun.shadow.camera.right = 180;
 		sun.shadow.camera.left = -100;
-		sun.shadow.camera.top = 100;
+		sun.shadow.camera.top = 110;
 		sun.shadow.camera.bottom = -50;
 		sun.shadow.bias = -0.002;
 		sun.shadow.normalBias = 0.02;
@@ -224,16 +190,16 @@ class Game {
 	}
 
 	initSnow() {
-		const count = 2000;
+		const count = 3000;
 		const area = 300;
-		const height = 100;
+		const height = 120;
 		const positions = new Float32Array(count * 3);
 		const speeds = new Float32Array(count);
 		const winds = new Float32Array(count);
 		const sizes = new Float32Array(count);
 
 		for (let i = 0; i < count; i++) {
-			positions[i * 3] = (Math.random() - 0.5) * area - 80;
+			positions[i * 3] = (Math.random() - 0.5) * area - 100;
 			positions[i * 3 + 1] = Math.random() * height;
 			positions[i * 3 + 2] = (Math.random() - 0.5) * area;
 			speeds[i] = 1 + Math.random() * 2;
@@ -300,8 +266,8 @@ class Game {
 			new THREE.ShaderMaterial({
 				precision: "lowp",
 				uniforms: { uFade: { value: 0 } },
-				vertexShader: textVertexShader,
-				fragmentShader: textFragmentShader,
+				vertexShader: titleVertexShader,
+				fragmentShader: titleFragmentShader,
 				transparent: true,
 			}),
 		);
@@ -334,19 +300,64 @@ class Game {
 	}
 
 	initEvents() {
-		window.addEventListener("resize", () => this.onResize());
-		document.addEventListener("mousemove", (e) => this.onMouseMove(e));
-		window.addEventListener("mousedown", (e) => this.onMouseDown(e));
-		window.addEventListener("mouseup", () => this.onMouseUp());
-		window.addEventListener("wheel", (e) => this.onWheel(e), {
-			passive: true,
+		window.addEventListener("resize", () => {
+			this.sizes.width = window.innerWidth;
+			this.sizes.height = window.innerHeight;
+			this.camera.aspect = this.sizes.width / this.sizes.height;
+			this.camera.updateProjectionMatrix();
+			this.updateRenderer();
 		});
+
+		document.addEventListener("mousemove", (e) => {
+			if (this.isCamMove) {
+				this.cursor.x = e.clientX / this.sizes.width - 0.5;
+				this.cursor.y = e.clientY / this.sizes.height - 0.5;
+			}
+			if (this.isDragging && this.activeBird) {
+				this.pullVector = {
+					x: (e.clientX - this.dragStart.x) / this.sizes.width,
+					y: (e.clientY - this.dragStart.y) / this.sizes.height,
+				};
+			}
+		});
+
+		window.addEventListener("mousedown", (e) => {
+			if (!this.isPlay || !this.activeBird) return;
+			this.isDragging = true;
+			this.dragStart = { x: e.clientX, y: e.clientY };
+			this.pullVector = null;
+		});
+
+		window.addEventListener("mouseup", () => {
+			if (!this.isDragging) return;
+			this.isDragging = false;
+			if (
+				this.pullVector &&
+				Math.hypot(this.pullVector.x, this.pullVector.y) > 0.02
+			) {
+				this._shootBird(this.pullVector);
+			}
+			this.pullVector = null;
+		});
+
+		window.addEventListener(
+			"wheel",
+			(e) => {
+				if (!this.isCamMove) return;
+				this.zoomTarget += e.deltaY * -0.001;
+				this.zoomTarget = Math.min(Math.max(this.zoomTarget, 1), 4);
+			},
+			{
+				passive: true,
+			},
+		);
+
 		document.addEventListener("visibilitychange", () => {
 			if (document.hidden) this.soundOff();
 			else if (this.isSound) this.soundOn();
 		});
 
-		this.elements.fsBtn.addEventListener("click", () => {
+		this.elements.fullscreenBtn.addEventListener("click", () => {
 			if (document.fullscreenElement) document.exitFullscreen();
 			else document.documentElement.requestFullscreen();
 			this.elements.fsIcons.forEach((el) => el.classList.toggle("active"));
@@ -361,7 +372,7 @@ class Game {
 		this.elements.levelBtns.forEach((btn) => {
 			btn.addEventListener("mouseenter", () => {
 				if (!btn.classList.contains("locked"))
-					this.playSound(this.sounds.ui.select);
+					this.playSound(this.sounds.ui.hover);
 			});
 			btn.addEventListener("click", () => {
 				if (btn.classList.contains("locked")) {
@@ -369,55 +380,18 @@ class Game {
 					return;
 				}
 				this.playSound(this.sounds.ui.click);
-				this.setupLevel(parseInt(btn.dataset.level));
+				this.changeToLevel(parseInt(btn.dataset.level));
 			});
 		});
-	}
 
-	onResize() {
-		this.sizes.width = window.innerWidth;
-		this.sizes.height = window.innerHeight;
-		this.camera.aspect = this.sizes.width / this.sizes.height;
-		this.camera.updateProjectionMatrix();
-		this.updateRenderer();
-	}
+		this.elements.closeBtn.addEventListener("click", () => {
+			this.playSound(this.sounds.ui.click);
+			this.changeToHome();
+		});
 
-	onMouseMove(e) {
-		if (this.isCamMove) {
-			this.cursor.x = e.clientX / this.sizes.width - 0.5;
-			this.cursor.y = e.clientY / this.sizes.height - 0.5;
-		}
-		if (this.isDragging && this.activeBird) {
-			this.pullVector = {
-				x: (e.clientX - this.dragStart.x) / this.sizes.width,
-				y: (e.clientY - this.dragStart.y) / this.sizes.height,
-			};
-		}
-	}
-
-	onMouseDown(e) {
-		if (!this.isPlay || !this.activeBird) return;
-		this.isDragging = true;
-		this.dragStart = { x: e.clientX, y: e.clientY };
-		this.pullVector = null;
-	}
-
-	onMouseUp() {
-		if (!this.isDragging) return;
-		this.isDragging = false;
-		if (
-			this.pullVector &&
-			Math.hypot(this.pullVector.x, this.pullVector.y) > 0.02
-		) {
-			this._shootBird(this.pullVector);
-		}
-		this.pullVector = null;
-	}
-
-	onWheel(e) {
-		if (!this.isCamMove) return;
-		this.zoomTarget += e.deltaY * -0.001;
-		this.zoomTarget = Math.min(Math.max(this.zoomTarget, 1), 4);
+		this.elements.closeBtn.addEventListener("mouseenter", () => {
+			this.playSound(this.sounds.ui.hover);
+		});
 	}
 
 	playSound(sound) {
@@ -433,23 +407,23 @@ class Game {
 	}
 
 	soundOn() {
-		this.music.play();
+		this.sounds.music.play();
 	}
 
 	soundOff() {
-		this.music.pause();
-		this.randomSounds.forEach((s) => s.audio.pause());
+		this.sounds.music.pause();
+		this.sounds.random.forEach((s) => s.audio.pause());
 	}
 
 	initRandomSounds() {
-		this.randomSounds.forEach((s) => {
+		this.sounds.random.forEach((s) => {
 			const play = () =>
 				setTimeout(
 					() => {
 						if (this.isSound && !document.hidden) s.audio.play();
 						play();
 					},
-					s.min + Math.random() * (s.max - s.min),
+					20000 + Math.random() * 30000,
 				);
 			play();
 		});
@@ -495,46 +469,42 @@ class Game {
 	}
 
 	async boot() {
-		this.stagger(this.elements.labelLoadings, true);
-		await this.wait(500);
-		this.elements.loaderProgress.classList.add("show");
-
 		await this.wait(1000);
-		this.setProgress(0.33);
-		await this.wait(1500);
-		this.setProgress(0.66);
+		this.setProgress(0.17);
+		await this.wait(1000);
+		this.setProgress(0.44);
+		await this.wait(1000);
+		this.setProgress(0.67);
 		await this.wait(1000);
 
 		while (!this.isLoaded) await this.wait(50);
 
 		this.setProgress(1);
-		this.stagger(this.elements.labelLoadings, false);
-		await this.wait(500);
-
-		this.stagger(this.elements.labelLoadeds, true);
 		await this.wait(1000);
+		this.elements.loaderClick.classList.add("show");
+		this.elements.loaderText.classList.add("hide");
+		this.elements.loader.classList.add("pointer");
 
-		this.elements.loaderCta.classList.add("show");
-		await this.waitForEnter();
-		this.elements.loaderCta.classList.remove("show");
-		this.elements.loaderProgress.classList.remove("show");
-		this.stagger(this.elements.labelLoadeds, false);
+		await this.waitForClick();
 
+		this.elements.loaderInner.classList.add("hide");
+		this.elements.loader.classList.remove("pointer");
 		await this.wait(500);
-		this.elements.loader.classList.add("end");
+
+		this.elements.loader.classList.add("hide");
 		await this.animateCamera(60, 4, 0, 0, 11, 0);
 		this.elements.loader.classList.add("remove");
 
 		await this.showTitle();
-		this.enableCamMove(true);
-		this.stagger(this.elements.uiStarts, true, 50);
+		this.enableCamMove();
+		this.stagger(this.elements.homes, true);
 	}
 
-	async stagger(elements, show, delay = 25) {
+	async stagger(elements, show) {
 		const n = elements.length;
 		for (let i = 0; i < n; i++) {
 			elements[show ? i : n - 1 - i].classList.toggle("show", show);
-			await this.wait(delay);
+			await this.wait(100);
 		}
 	}
 
@@ -543,20 +513,36 @@ class Game {
 	}
 
 	setProgress(value) {
+		const from =
+			(parseFloat(this.elements.loaderProgress.style.getPropertyValue("--s")) ||
+				0) * 100;
+		const to = value * 100;
+
 		this.elements.loaderProgress.style.setProperty("--s", value);
+
+		const start = performance.now();
+		const tick = (time) => {
+			const t = Math.min((time - start) / 500, 1);
+			const ease = 1 - Math.pow(1 - t, 3);
+			this.elements.loaderPercent.textContent =
+				Math.round(from + (to - from) * ease) + "%";
+			if (t < 1) requestAnimationFrame(tick);
+		};
+		requestAnimationFrame(tick);
 	}
 
-	waitForEnter() {
+	waitForClick() {
 		return new Promise((resolve) => {
-			const onKey = (e) => {
-				if (e.code !== "Enter" || e.repeat) return;
-				document.removeEventListener("keydown", onKey);
-				this.toggleSound();
-				this.initRandomSounds();
-				this.playSound(this.sounds.ui.click);
-				resolve();
-			};
-			document.addEventListener("keydown", onKey);
+			document.addEventListener(
+				"click",
+				() => {
+					this.toggleSound();
+					this.initRandomSounds();
+					this.playSound(this.sounds.ui.click);
+					resolve();
+				},
+				{ once: true },
+			);
 		});
 	}
 
@@ -610,20 +596,33 @@ class Game {
 		});
 	}
 
-	enableCamMove(enabled) {
-		this.isCamMove = enabled;
-		if (enabled) this.camTargetBase = this.camTarget.clone();
+	enableCamMove(enable = true) {
+		this.isCamMove = enable;
+		if (enable) this.camTargetBase = this.camTarget.clone();
 	}
 
-	/*-- Level --*/
-
-	async setupLevel(id) {
-		this.toggleUi(false);
+	changeToLevel(id) {
+		this.showLevelUi();
 		this.showTitle(false);
 		this.enableCamMove(false);
-		await this.animateCamera(50, 13, 0, 0, 6, 0);
+		this.animateCamera(50, 13, 0, 0, 6, 0);
 		this.enableCamMove(true);
+	}
 
+	changeToHome() {
+		this.showLevelUi(false);
+		this.showTitle();
+		this.enableCamMove(false);
+		this.animateCamera(60, 4, 0, 0, 11, 0);
+		this.enableCamMove(true);
+	}
+
+	showLevelUi(level = true) {
+		this.elements.nav.classList.toggle("show", !level);
+		this.stagger(this.elements.levels, level);
+	}
+
+	async setupLevel(id) {
 		/*
 		this._showLevelUi();
 		this._enableCameraMove(false);
@@ -675,12 +674,6 @@ class Game {
 		this._enableCameraMove(true);
 		//this._prepareBird();
 		this.isPlay = true;*/
-	}
-
-	toggleUi(home) {
-		this.stagger(this.elements.levelBtns, home, 50);
-		this.stagger(this.elements.forces, !home, 50);
-		this.elements.level.classList.toggle("show", !home);
 	}
 
 	_getType(name) {
@@ -921,9 +914,9 @@ class Game {
 		this.camTarget.y += (targetY - this.camTarget.y) * lerpSpeed;
 		this.camera.lookAt(this.camTarget);
 
-		const active = Math.round(normalized * 9);
+		const active = Math.round(normalized * 10);
 		if (active !== this.lastActiveZoom) {
-			this.elements.zooms.forEach((z, i) =>
+			this.elements.zoomSpans.forEach((z, i) =>
 				z.classList.toggle("active", i < active),
 			);
 			this.lastActiveZoom = active;
