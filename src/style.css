@@ -51,10 +51,6 @@ body {
 	cursor: pointer;
 }
 
-#loader.hide {
-	opacity: 0;
-}
-
 #loader.remove {
 	display: none;
 }
@@ -117,7 +113,7 @@ body {
 	}
 
 	10% {
-		transform: scale(0.7);
+		transform: scale(.7);
 	}
 }
 
@@ -212,7 +208,7 @@ body {
 
 #btn-sound {
 	flex: 1;
-	gap: 4px;
+	gap: .25rem;
 	height: 100%;
 }
 
@@ -230,11 +226,11 @@ body {
 }
 
 #btn-sound span:nth-of-type(2) {
-	animation-delay: 0.4s;
+	animation-delay: .4s;
 }
 
 #btn-sound span:nth-of-type(3) {
-	animation-delay: 0.2s;
+	animation-delay: .2s;
 }
 
 @keyframes sound {
@@ -327,19 +323,19 @@ body {
 }
 
 #power span:nth-of-type(1) {
-	width: 0.5rem;
+	width: .5rem;
 }
 
 #power span:nth-of-type(2) {
-	width: 0.6rem;
+	width: .6rem;
 }
 
 #power span:nth-of-type(3) {
-	width: 0.72rem;
+	width: .72rem;
 }
 
 #power span:nth-of-type(4) {
-	width: 0.86rem;
+	width: .86rem;
 }
 
 #power span:nth-of-type(5) {
@@ -383,13 +379,13 @@ body {
 #pigs {
 	align-items: center;
 	display: flex;
-	gap: 8px;
+	gap: .5rem;
 }
 
 #destruction {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: .25rem;
 }
 
 #destruction-stars {
@@ -472,6 +468,11 @@ button {
 .level.show {
 	opacity: 1;
 	pointer-events: auto;
+}
+
+#loader.hide,
+.btn-level:not(.locked) .btn-level-lock {
+	opacity: 0;
 }
 
 #loader-inner.hide,
