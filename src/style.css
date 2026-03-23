@@ -35,6 +35,14 @@ body {
 	user-select: none;
 }
 
+body.pointer {
+	cursor: pointer;
+}
+
+body.dragging {
+	cursor: grabbing;
+}
+
 /*-- Loader --*/
 
 #loader {
@@ -45,10 +53,6 @@ body {
 	position: fixed;
 	transition: opacity 1s var(--ease);
 	z-index: 9999;
-}
-
-#loader.pointer {
-	cursor: pointer;
 }
 
 #loader.remove {
@@ -402,6 +406,17 @@ body {
 	border-radius: var(--bar-size);
 	height: var(--bar-size);
 	width: var(--pill-width);
+	position: relative;
+}
+
+#destruction-progress::before {
+	background-color: #fff;
+	content: "";
+	inset: 0;
+	position: absolute;
+	transform: scaleX(var(--d, 0));
+	transform-origin: left;
+	transition: transform var(--duration) var(--ease);
 }
 
 #btn-close {
@@ -417,6 +432,27 @@ body {
 
 #btn-close:hover svg {
 	transform: rotate(90deg);
+}
+
+/*-- End --*/
+
+#win,
+#lose {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, calc(-50% + 1rem));
+	font-size: 6rem;
+	pointer-events: none;
+	opacity: 0;
+	transition: var(--transition);
+	letter-spacing: 8px;
+}
+
+#win.show,
+#lose.show {
+	transform: translate(-50%, -50%);
+	opacity: 1;
 }
 
 /*-- WebGL canvas --*/
@@ -468,6 +504,11 @@ button {
 .level.show {
 	opacity: 1;
 	pointer-events: auto;
+}
+
+.btn-level-star.active,
+.destruction-star.active {
+	color: #fff;
 }
 
 #loader.hide,

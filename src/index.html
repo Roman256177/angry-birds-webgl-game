@@ -54,7 +54,7 @@
 
 			<!-- Total stars -->
 			<div id="stars" class="pill home">
-				<p>0 <span class="font-size-default">of</span> 9</p>
+				<p><span id="stars-total">0</span> <span class="font-size-default">of</span> 9</p>
 				<svg width="24" height="24">
 					<use href="#icon-star" />
 				</svg>
@@ -164,11 +164,11 @@
 
 			<!-- Level -->
 			<div id="level" class="pill level">
-				<span>1</span>
+				<span id="level-number">1</span>
 				<div class="divider"></div>
 				<div id="birds">
-					<img src="/images/bird.webp" alt="Birds remaining" width="20" height="20">
-					<span class="font-size-default">3</span>
+					<img src="/images/bird.webp" alt="" width="20" height="20">
+					<span id="birds-left" class="font-size-default">3</span>
 				</div>
 				<div class="divider"></div>
 				<div id="destruction">
@@ -187,8 +187,8 @@
 				</div>
 				<div class="divider"></div>
 				<div id="pigs">
-					<img src="/images/pig.webp" alt="Pigs remaining" width="20" height="20">
-					<span class="font-size-default">2</span>
+					<img src="/images/pig.webp" alt="" width="20" height="20">
+					<span id="pigs-left" class="font-size-default">2</span>
 				</div>
 				<div class="divider"></div>
 				<button id="btn-close">
@@ -197,6 +197,10 @@
 					</svg>
 				</button>
 			</div>
+
+			<!-- End -->
+			<p id="win">Well Done!</p>
+			<p id="lose">So Close!</p>
 		</div>
 
 		<!-- WebGL canvas -->
