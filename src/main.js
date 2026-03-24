@@ -23,9 +23,10 @@ class Game {
 		this.initScene();
 		this.initPhysics();
 		this.initLoaders();
-
 		this.boundLoop = this.loop.bind(this);
 	}
+
+	/*-- Init --*/
 
 	initDOM() {
 		const $ = (id) => document.getElementById(id);
@@ -61,6 +62,7 @@ class Game {
 
 	initSound() {
 		this.allSounds = [];
+
 		const audio = (src, volume = 1, loop = false) => {
 			const a = new Audio(src);
 			a.volume = volume;
@@ -83,35 +85,35 @@ class Game {
 				collide: audio("/sounds/bird/collide.wav"),
 				destroy: audio("/sounds/bird/destroy.wav"),
 			},
-			end: {
-				win: audio("/sounds/end/win.wav"),
-				lose: audio("/sounds/end/lose.wav"),
-			},
-			ice: {
-				collide: audio("/sounds/ice/collide.wav"),
-				destroy: audio("/sounds/ice/destroy.wav"),
-			},
 			pig: {
 				add: audio("/sounds/pig/add.wav"),
 				collide: audio("/sounds/pig/collide.wav"),
 				destroy: audio("/sounds/pig/destroy.wav"),
 			},
-			slingshot: {
-				shoot: audio("/sounds/slingshot/shoot.wav"),
-				stretch: audio("/sounds/slingshot/stretch.wav"),
+			wood: {
+				collide: audio("/sounds/wood/collide.wav"),
+				destroy: audio("/sounds/wood/destroy.wav"),
 			},
 			stone: {
 				collide: audio("/sounds/stone/collide.wav"),
 				destroy: audio("/sounds/stone/destroy.wav"),
 			},
+			ice: {
+				collide: audio("/sounds/ice/collide.wav"),
+				destroy: audio("/sounds/ice/destroy.wav"),
+			},
+			slingshot: {
+				shoot: audio("/sounds/slingshot/shoot.wav"),
+				stretch: audio("/sounds/slingshot/stretch.wav"),
+			},
+			end: {
+				win: audio("/sounds/end/win.wav"),
+				lose: audio("/sounds/end/lose.wav"),
+			},
 			ui: {
 				click: audio("/sounds/ui/click.wav"),
 				disabled: audio("/sounds/ui/disabled.wav"),
 				hover: audio("/sounds/ui/hover.wav"),
-			},
-			wood: {
-				collide: audio("/sounds/wood/collide.wav"),
-				destroy: audio("/sounds/wood/destroy.wav"),
 			},
 		};
 	}
@@ -120,34 +122,23 @@ class Game {
 		this.shootForce = 40;
 		this.minImpact = 2;
 		this.maxPull = 4;
+		this.shootArc = 0.25;
+		this.wakeRadiusSq = 10;
 		this.starThresholds = [0.175, 0.5, 0.825];
 		this.slingshotPos = new THREE.Vector3(27.5, 6.75, 0);
-		this.slingEndPos = new THREE.Vector3();
 
 		this.health = { pig: 25, wood: 50, stone: 75, ice: 25, bird: 100 };
 		this.mass = { pig: 1, wood: 2, stone: 3, ice: 1, bird: 1 };
-		this.physicsObjects = [];
-		this.bodiesToRemove = [];
-		this.objectsToDestroy = [];
 
 		this.snowCount = 3000;
 		this.snowArea = 300;
 		this.snowHeight = 120;
+
 		this.skyColor = new THREE.Color(0x5aaee8);
 		this.sizes = { width: window.innerWidth, height: window.innerHeight };
 		this.prevTime = 0;
+
 		this.vec3 = new THREE.Vector3();
-
-		this.snow = null;
-		this.title = null;
-		this.subtitle = null;
-		this.slingLeft = null;
-		this.slingRight = null;
-		this.slingMat = null;
-
-		this.cursor = { x: 0, y: 0 };
-		this.dragStart = { x: 0, y: 0 };
-		this.pullVector = null;
 
 		this.isSound = false;
 		this.isCamMove = false;
@@ -155,26 +146,43 @@ class Game {
 		this.isPlay = false;
 		this.isDrag = false;
 		this.isEnding = false;
-		this.isWheelEnabled = true;
 
-		this.camTarget = new THREE.Vector3(2, 3, -6);
-		this.camTargetBase = null;
+		this.cursor = { x: 0, y: 0 };
+		this.dragStart = { x: 0, y: 0 };
+		this.pullVector = null;
+
 		this.zoomTarget = 1;
 		this.lastZoomSpan = -1;
 		this.lastPowerSpan = -1;
+		this.camTarget = new THREE.Vector3(2, 3, -6);
+		this.camTargetBase = null;
+
+		this.snow = null;
+		this.title = null;
+		this.subtitle = null;
+
+		this.slingLeft = null;
+		this.slingRight = null;
+		this.slingMat = null;
+		this.slingEndPos = new THREE.Vector3();
 
 		this.levels = { 1: [], 2: [], 3: [] };
 		this.stars = { 1: 0, 2: 0, 3: 0 };
+
 		this.currentLevel = null;
 		this.levelHealth = 0;
 		this.levelDamage = 0;
 		this.birds = [];
 		this.pigs = [];
 		this.boxes = [];
+		this.physicsObjects = [];
 		this.activeBird = null;
 		this.activeBirdIndex = 0;
-		this.resultTimeout = null;
 		this.pigsCleared = false;
+		this.resultTimeout = null;
+
+		this.bodiesToRemove = [];
+		this.objectsToDestroy = [];
 	}
 
 	initScene() {
@@ -229,7 +237,7 @@ class Game {
 		this.initLights();
 		this.initSnow();
 		this.initTitle();
-		this.initSlings();
+		this.initSlingshot();
 		this.initEvents();
 		this.initModel();
 		this.loop();
@@ -270,14 +278,14 @@ class Game {
 			sizes[i] = 1 + Math.random();
 		}
 
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-		geometry.setAttribute("aSpeed", new THREE.BufferAttribute(speeds, 1));
-		geometry.setAttribute("aWind", new THREE.BufferAttribute(winds, 1));
-		geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+		geo.setAttribute("aSpeed", new THREE.BufferAttribute(speeds, 1));
+		geo.setAttribute("aWind", new THREE.BufferAttribute(winds, 1));
+		geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
 
 		this.snow = new THREE.Points(
-			geometry,
+			geo,
 			new THREE.ShaderMaterial({
 				precision: "lowp",
 				uniforms: { uTime: { value: 0 } },
@@ -311,21 +319,21 @@ class Game {
 		this.subtitle.position.set(-115, 45, 0);
 		group.add(this.subtitle);
 
-		const geometry = new TextGeometry("Angry Birds", {
+		const titleGeo = new TextGeometry("Angry Birds", {
 			font,
 			size: 43,
 			depth: 0,
 			curveSegments: 1,
 		});
-		geometry.computeBoundingBox();
-		geometry.translate(
-			-(geometry.boundingBox.max.x - geometry.boundingBox.min.x) * 0.5,
+		titleGeo.computeBoundingBox();
+		titleGeo.translate(
+			-(titleGeo.boundingBox.max.x - titleGeo.boundingBox.min.x) * 0.5,
 			0,
 			0,
 		);
 
 		this.title = new THREE.Mesh(
-			geometry,
+			titleGeo,
 			new THREE.ShaderMaterial({
 				precision: "lowp",
 				uniforms: { uFade: { value: 0 } },
@@ -337,187 +345,74 @@ class Game {
 		group.add(this.title);
 	}
 
-	initSlings() {
-		const leftGeo = new LineGeometry();
-		leftGeo.setPositions([
-			this.slingshotPos.x,
-			this.slingshotPos.y,
-			1.5,
-			this.slingshotPos.x,
-			this.slingshotPos.y,
-			this.slingshotPos.z,
-		]);
+	initSlingshot() {
+		const { x, y } = this.slingshotPos;
 
-		const rightGeo = new LineGeometry();
-		rightGeo.setPositions([
-			this.slingshotPos.x,
-			this.slingshotPos.y,
-			-1.5,
-			this.slingshotPos.x,
-			this.slingshotPos.y,
-			this.slingshotPos.z,
-		]);
+		const makeGeo = (z) => {
+			const geo = new LineGeometry();
+			geo.setPositions([x, y, z, x, y, 0]);
+			return geo;
+		};
 
 		this.slingMat = new LineMaterial({
 			color: 0x000000,
 			linewidth: 0.25,
 			worldUnits: true,
 		});
+		this.updateSlingshotResolution();
 
+		this.slingLeft = new Line2(makeGeo(1.5), this.slingMat);
+		this.slingRight = new Line2(makeGeo(-1.5), this.slingMat);
+		this.scene.add(this.slingLeft, this.slingRight);
+	}
+
+	updateSlingshotResolution() {
 		this.slingMat.resolution.set(
 			this.sizes.width * Math.min(window.devicePixelRatio, 2),
 			this.sizes.height * Math.min(window.devicePixelRatio, 2),
 		);
-
-		this.slingLeft = new Line2(leftGeo, this.slingMat);
-		this.slingRight = new Line2(rightGeo, this.slingMat);
-
-		this.scene.add(this.slingLeft, this.slingRight);
 	}
 
-	updateSlings() {
-		const pos = this.activeBird.position;
+	updateSlingshot() {
+		const { x, y, z } = this.activeBird.position;
 		const sx = this.slingshotPos.x;
 		const sy = this.slingshotPos.y;
-
-		this.slingLeft.geometry.setPositions([sx, sy, 1.5, pos.x, pos.y, pos.z]);
-		this.slingRight.geometry.setPositions([sx, sy, -1.5, pos.x, pos.y, pos.z]);
-		this.slingEndPos.set(pos.x, pos.y, pos.z);
+		this.slingLeft.geometry.setPositions([sx, sy, 1.5, x, y, z]);
+		this.slingRight.geometry.setPositions([sx, sy, -1.5, x, y, z]);
+		this.slingEndPos.set(x, y, z);
 	}
 
-	resetSlings() {
-		const startLeft = this.slingEndPos.clone();
-		const startRight = this.slingEndPos.clone();
+	releaseSlingshot() {
+		const endL = this.slingEndPos.clone();
+		const endR = this.slingEndPos.clone();
 		const target = this.slingshotPos;
+		const sx = target.x;
+		const sy = target.y;
 
-		gsap.to(startLeft, {
-			x: target.x,
-			y: target.y,
-			z: target.z,
-			duration: 1,
-			ease: "elastic.out(1,0.5)",
-			onUpdate: () =>
-				this.slingLeft.geometry.setPositions([
-					this.slingshotPos.x,
-					this.slingshotPos.y,
-					1.5,
-					startLeft.x,
-					startLeft.y,
-					startLeft.z,
-				]),
-		});
+		const animate = (end, z, geo) =>
+			gsap.to(end, {
+				x: target.x,
+				y: target.y,
+				z: target.z,
+				duration: 1,
+				ease: "elastic.out(1, 0.5)",
+				onUpdate: () => geo.setPositions([sx, sy, z, end.x, end.y, end.z]),
+			});
 
-		gsap.to(startRight, {
-			x: target.x,
-			y: target.y,
-			z: target.z,
-			duration: 1,
-			ease: "elastic.out(1,0.5)",
-			onUpdate: () =>
-				this.slingRight.geometry.setPositions([
-					this.slingshotPos.x,
-					this.slingshotPos.y,
-					-1.5,
-					startRight.x,
-					startRight.y,
-					startRight.z,
-				]),
-		});
+		animate(endL, 1.5, this.slingLeft.geometry);
+		animate(endR, -1.5, this.slingRight.geometry);
 	}
 
 	initEvents() {
-		window.addEventListener("resize", () => {
-			this.sizes.width = window.innerWidth;
-			this.sizes.height = window.innerHeight;
-			this.camera.aspect = this.sizes.width / this.sizes.height;
-			this.slingMat.resolution.set(
-				this.sizes.width * Math.min(window.devicePixelRatio, 2),
-				this.sizes.height * Math.min(window.devicePixelRatio, 2),
-			);
-			this.camera.updateProjectionMatrix();
-			this.updateRenderer();
-		});
-
-		document.addEventListener("mousemove", (e) => {
-			if (this.isCamMove) {
-				this.cursor.x = e.clientX / this.sizes.width - 0.5;
-				this.cursor.y = e.clientY / this.sizes.height - 0.5;
-			}
-			if (this.isDrag && this.activeBird) {
-				this.pullVector = {
-					x: this.clamp((e.clientX - this.dragStart.x) / 300, -1, 1),
-					y: this.clamp((e.clientY - this.dragStart.y) / 300, 0, 1),
-				};
-				const active = Math.round(this.pullVector.y * 10);
-				if (active !== this.lastPowerSpan) {
-					this.elements.powerSpans.forEach((s, i) =>
-						s.classList.toggle("active", i < active),
-					);
-					this.lastPowerSpan = active;
-				}
-			}
-		});
-
-		window.addEventListener("mousedown", (e) => {
-			if (!this.isPlay || !this.activeBird || e.target.closest("button"))
-				return;
-			document.body.classList.remove("pointer");
-			document.body.classList.add("grabbing");
-			this.playSound(this.sounds.slingshot.stretch);
-			this.isDrag = true;
-			this.dragStart = { x: e.clientX, y: e.clientY };
-			this.pullVector = null;
-		});
-
-		window.addEventListener("mouseup", () => {
-			if (!this.isDrag) return;
-			document.body.classList.remove("grabbing");
-			this.isDrag = false;
-
-			if (this.pullVector && this.pullVector.y > 0.2) {
-				this.shootBird(this.pullVector);
-				this.playSound(this.sounds.slingshot.shoot);
-			} else if (this.activeBird) {
-				document.body.classList.add("pointer");
-				gsap.to(this.activeBird.position, {
-					x: this.slingshotPos.x,
-					y: this.slingshotPos.y,
-					z: this.slingshotPos.z,
-					duration: 0.25,
-					ease: "back.out(1.7)",
-					onUpdate: () => {
-						if (this.activeBird?.userData.body) {
-							this.activeBird.userData.body.position.set(
-								this.activeBird.position.x,
-								this.activeBird.position.y,
-								this.activeBird.position.z,
-							);
-						}
-						this.updateSlings();
-					},
-				});
-			}
-
-			this.pullVector = null;
-			this.elements.powerSpans.forEach((s) => s.classList.remove("active"));
-			this.lastPowerSpan = -1;
-		});
-
-		window.addEventListener(
-			"wheel",
-			(e) => {
-				if (!this.isCamMove || !this.isWheelEnabled) return;
-				this.zoomTarget += e.deltaY * -0.001;
-				this.zoomTarget = this.clamp(this.zoomTarget, 1, 4);
-			},
-			{
-				passive: true,
-			},
-		);
+		window.addEventListener("resize", () => this.onResize());
+		document.addEventListener("mousemove", (e) => this.onMouseMove(e));
+		window.addEventListener("mousedown", (e) => this.onMouseDown(e));
+		window.addEventListener("mouseup", () => this.onMouseUp());
+		window.addEventListener("wheel", (e) => this.onWheel(e), { passive: true });
 
 		document.addEventListener("visibilitychange", () => {
 			if (document.hidden) this.soundOff();
-			else if (this.isSound) this.soundOn();
+			else if (this.isSound) this.sounds.music.play().catch(() => {});
 		});
 
 		this.elements.fullscreenBtn.addEventListener("click", () => {
@@ -529,10 +424,7 @@ class Game {
 			this.playSound(this.sounds.ui.click);
 		});
 
-		this.elements.soundBtn.addEventListener("click", () => {
-			this.toggleSound();
-			this.playSound(this.sounds.ui.click);
-		});
+		this.elements.soundBtn.addEventListener("click", () => this.toggleSound());
 
 		this.elements.selectBtns.forEach((btn) => {
 			btn.addEventListener("mouseenter", () => {
@@ -549,9 +441,9 @@ class Game {
 			});
 		});
 
-		this.elements.closeBtn.addEventListener("mouseenter", () => {
-			this.playSound(this.sounds.ui.hover);
-		});
+		this.elements.closeBtn.addEventListener("mouseenter", () =>
+			this.playSound(this.sounds.ui.hover),
+		);
 
 		this.elements.closeBtn.addEventListener("click", () => {
 			this.playSound(this.sounds.ui.click);
@@ -559,26 +451,121 @@ class Game {
 		});
 	}
 
-	clamp(value, min, max) {
-		return Math.min(Math.max(value, min), max);
+	onResize() {
+		this.sizes.width = window.innerWidth;
+		this.sizes.height = window.innerHeight;
+		this.camera.aspect = this.sizes.width / this.sizes.height;
+		this.camera.updateProjectionMatrix();
+		this.updateSlingshotResolution();
+		this.updateRenderer();
 	}
 
+	onMouseMove(e) {
+		if (this.isCamMove) {
+			this.cursor.x = e.clientX / this.sizes.width - 0.5;
+			this.cursor.y = e.clientY / this.sizes.height - 0.5;
+		}
+
+		if (!this.isDrag || !this.activeBird) return;
+
+		this.pullVector = {
+			x: this.clamp((e.clientX - this.dragStart.x) / 300, -1, 1),
+			y: this.clamp((e.clientY - this.dragStart.y) / 300, 0, 1),
+		};
+
+		const active = Math.round(this.pullVector.y * 10);
+		if (active !== this.lastPowerSpan) {
+			this.elements.powerSpans.forEach((s, i) =>
+				s.classList.toggle("active", i < active),
+			);
+			this.lastPowerSpan = active;
+		}
+	}
+
+	onMouseDown(e) {
+		if (!this.isPlay || !this.activeBird || e.target.closest("button")) return;
+		document.body.classList.replace("pointer", "grabbing");
+		this.playSound(this.sounds.slingshot.stretch);
+		this.isDrag = true;
+		this.dragStart = { x: e.clientX, y: e.clientY };
+		this.pullVector = null;
+	}
+
+	onMouseUp() {
+		if (!this.isDrag) return;
+		document.body.classList.remove("grabbing");
+		this.isDrag = false;
+
+		if (this.pullVector && this.pullVector.y > 0.2) {
+			this.playSound(this.sounds.slingshot.shoot);
+			this.shootBird(this.pullVector);
+		} else if (this.activeBird) {
+			this.snapBirdToSlingshot();
+		}
+
+		this.pullVector = null;
+		this.elements.powerSpans.forEach((s) => s.classList.remove("active"));
+		this.lastPowerSpan = -1;
+	}
+
+	onWheel(e) {
+		if (!this.isCamMove) return;
+		this.zoomTarget = this.clamp(this.zoomTarget + e.deltaY * -0.001, 1, 4);
+	}
+
+	snapBirdToSlingshot() {
+		document.body.classList.add("pointer");
+		gsap.to(this.activeBird.position, {
+			x: this.slingshotPos.x,
+			y: this.slingshotPos.y,
+			z: this.slingshotPos.z,
+			duration: 0.25,
+			ease: "back.out(1.7)",
+			onUpdate: () => {
+				const body = this.activeBird?.userData.body;
+				if (body)
+					body.position.set(
+						this.activeBird.position.x,
+						this.activeBird.position.y,
+						this.activeBird.position.z,
+					);
+				this.updateSlingshot();
+			},
+		});
+	}
+
+	/*-- Helpers --*/
+
+	clamp(val, min, max) {
+		return Math.min(Math.max(val, min), max);
+	}
+
+	wait(ms) {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	/*-- Sound --*/
+
 	playSound(sound) {
-		if (!this.isSound || document.hidden) return;
+		if (!sound || !this.isSound || document.hidden) return;
 		sound.currentTime = 0;
-		sound.play();
+		sound.play().catch(() => {});
 	}
 
 	toggleSound() {
 		this.isSound = !this.isSound;
-		this.isSound ? this.soundOn() : this.soundOff();
 		this.elements.soundBtn.classList.toggle("active", this.isSound);
+		if (this.isSound) {
+			this.soundOn();
+			this.playSound(this.sounds.ui.click);
+		} else {
+			this.soundOff();
+		}
 	}
 
 	soundOn() {
-		this.sounds.music.play();
+		this.sounds.music.play().catch(() => {});
 	}
-
 	soundOff() {
 		this.allSounds.forEach((s) => {
 			s.pause();
@@ -588,17 +575,19 @@ class Game {
 
 	initRandomSounds() {
 		this.sounds.random.forEach((s) => {
-			const play = () =>
+			const schedule = () =>
 				setTimeout(
 					() => {
-						if (this.isSound && !document.hidden) s.play();
-						play();
+						if (this.isSound && !document.hidden) s.play().catch(() => {});
+						schedule();
 					},
 					20000 + Math.random() * 30000,
 				);
-			play();
+			schedule();
 		});
 	}
+
+	/*-- Model --*/
 
 	initModel() {
 		this.gltfLoader.load("/models/angrybirds.glb", (gltf) => {
@@ -607,10 +596,10 @@ class Game {
 			root.traverse((obj) => {
 				if (!obj.isMesh) return;
 
-				const materials = Array.isArray(obj.material)
+				const mats = Array.isArray(obj.material)
 					? obj.material
 					: [obj.material];
-				materials.forEach((m) => {
+				mats.forEach((m) => {
 					m.flatShading = true;
 					m.needsUpdate = true;
 				});
@@ -655,6 +644,8 @@ class Game {
 		});
 	}
 
+	/*-- Boot --*/
+
 	async boot() {
 		await this.wait(1000);
 		this.setProgress(0.29);
@@ -666,6 +657,7 @@ class Game {
 
 		this.setProgress(1);
 		await this.wait(1000);
+
 		this.elements.loaderClick.classList.add("show");
 		this.elements.loaderText.classList.add("hide");
 		document.body.classList.add("pointer");
@@ -679,11 +671,25 @@ class Game {
 		this.elements.loader.classList.add("hide");
 		await this.animateCamera(60, 4, 0, 0, 11, 0);
 		this.elements.loader.classList.add("remove");
-		this.loadProgress();
 
+		this.loadProgress();
 		await this.showTitle();
 		this.enableCamMove();
 		this.stagger(this.elements.homes, true);
+	}
+
+	waitForClick() {
+		return new Promise((resolve) => {
+			document.addEventListener(
+				"click",
+				() => {
+					this.toggleSound();
+					this.initRandomSounds();
+					resolve();
+				},
+				{ once: true },
+			);
+		});
 	}
 
 	async stagger(elements, show) {
@@ -694,16 +700,11 @@ class Game {
 		}
 	}
 
-	wait(ms) {
-		return new Promise((resolve) => setTimeout(resolve, ms));
-	}
-
 	setProgress(value) {
 		const from =
 			(parseFloat(this.elements.loaderProgress.style.getPropertyValue("--s")) ||
 				0) * 100;
 		const to = value * 100;
-
 		this.elements.loaderProgress.style.setProperty("--s", value);
 
 		const start = performance.now();
@@ -716,64 +717,7 @@ class Game {
 		requestAnimationFrame(tick);
 	}
 
-	loadProgress() {
-		const saved = localStorage.getItem("stars");
-		if (!saved) return;
-
-		this.stars = JSON.parse(saved);
-
-		Object.entries(this.stars).forEach(([level, earned]) => {
-			const btn = this.elements.selectBtns[level - 1];
-			if (!btn) return;
-
-			btn.querySelectorAll(".select-btn-star").forEach((star, i) => {
-				star.classList.toggle("active", i < earned);
-			});
-
-			if (earned > 0) {
-				const nextBtn = this.elements.selectBtns[level];
-				if (nextBtn) nextBtn.classList.remove("locked");
-			}
-		});
-
-		const total = Object.values(this.stars).reduce((a, b) => a + b, 0);
-		this.elements.totalStars.textContent = total;
-	}
-
-	resetProgress() {
-		localStorage.removeItem("stars");
-		this.stars = { 1: 0, 2: 0, 3: 0 };
-
-		this.elements.selectBtns.forEach((btn) => {
-			btn.querySelectorAll(".select-btn-star").forEach((star) => {
-				star.classList.remove("active");
-			});
-			if (parseInt(btn.dataset.level) > 1) {
-				btn.classList.add("locked");
-			}
-		});
-
-		this.elements.totalStars.textContent = 0;
-	}
-
-	saveProgress() {
-		localStorage.setItem("stars", JSON.stringify(this.stars));
-	}
-
-	waitForClick() {
-		return new Promise((resolve) => {
-			document.addEventListener(
-				"click",
-				() => {
-					this.toggleSound();
-					this.initRandomSounds();
-					this.playSound(this.sounds.ui.click);
-					resolve();
-				},
-				{ once: true },
-			);
-		});
-	}
+	/*-- Camera --*/
 
 	animateCamera(camX, camY, camZ, tarX, tarY, tarZ) {
 		return new Promise((resolve) => {
@@ -797,6 +741,25 @@ class Game {
 			);
 		});
 	}
+
+	enableCamMove(enable = true) {
+		this.isCamMove = enable;
+		if (enable) this.camTargetBase = this.camTarget.clone();
+	}
+
+	resetZoom() {
+		this.zoomTarget = 1;
+		this.lastZoomSpan = -1;
+		this.elements.zoomSpans.forEach((z) => z.classList.remove("active"));
+		gsap.to(this.camera, {
+			zoom: 1,
+			duration: 1,
+			ease: "power1.inOut",
+			onUpdate: () => this.camera.updateProjectionMatrix(),
+		});
+	}
+
+	/*-- Title --*/
 
 	showTitle(show = true) {
 		return new Promise((resolve) => {
@@ -825,10 +788,52 @@ class Game {
 		});
 	}
 
-	enableCamMove(enable = true) {
-		this.isCamMove = enable;
-		if (enable) this.camTargetBase = this.camTarget.clone();
+	/*-- Progress --*/
+
+	saveProgress() {
+		localStorage.setItem("stars", JSON.stringify(this.stars));
 	}
+
+	loadProgress() {
+		const saved = localStorage.getItem("stars");
+		if (!saved) return;
+
+		this.stars = JSON.parse(saved);
+
+		Object.entries(this.stars).forEach(([level, earned]) => {
+			const lvl = parseInt(level);
+			const btn = this.elements.selectBtns[lvl - 1];
+			if (!btn) return;
+
+			btn
+				.querySelectorAll(".select-btn-star")
+				.forEach((star, i) => star.classList.toggle("active", i < earned));
+
+			if (earned > 0) {
+				const next = this.elements.selectBtns[lvl];
+				if (next) next.classList.remove("locked");
+			}
+		});
+
+		this.elements.totalStars.textContent = Object.values(this.stars).reduce(
+			(a, b) => a + b,
+			0,
+		);
+	}
+
+	resetProgress() {
+		localStorage.removeItem("stars");
+		this.stars = { 1: 0, 2: 0, 3: 0 };
+		this.elements.selectBtns.forEach((btn) => {
+			btn
+				.querySelectorAll(".select-btn-star")
+				.forEach((s) => s.classList.remove("active"));
+			if (parseInt(btn.dataset.level) > 1) btn.classList.add("locked");
+		});
+		this.elements.totalStars.textContent = 0;
+	}
+
+	/*-- Level --*/
 
 	async changeToLevel(id) {
 		gsap.to(this.sounds.music, { volume: 0.1, duration: 1 });
@@ -846,15 +851,13 @@ class Game {
 		clearTimeout(this.resultTimeout);
 		this.elements.win.classList.remove("show");
 		this.elements.lose.classList.remove("show");
-
 		this.sounds.end.win.pause();
 		this.sounds.end.win.currentTime = 0;
 		this.sounds.end.lose.pause();
 		this.sounds.end.lose.currentTime = 0;
 
 		if (this.pigsCleared && this.currentLevel) {
-			const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
-			this.updateStars(ratio);
+			this.updateStars(Math.min(this.levelDamage / this.levelHealth, 1));
 		}
 
 		gsap.to(this.sounds.music, { volume: 0.35, duration: 1 });
@@ -868,20 +871,6 @@ class Game {
 		this.elements.select.classList.add("show");
 	}
 
-	resetZoom() {
-		this.isWheelEnabled = false;
-		this.zoomTarget = 1;
-		this.lastZoomSpan = -1;
-		this.elements.zoomSpans.forEach((z) => z.classList.remove("active"));
-		gsap.to(this.camera, {
-			zoom: 1,
-			duration: 1,
-			ease: "power1.inOut",
-			onUpdate: () => this.camera.updateProjectionMatrix(),
-			onComplete: () => (this.isWheelEnabled = true),
-		});
-	}
-
 	async setupLevel(id) {
 		this.currentLevel = id;
 		this.activeBirdIndex = 0;
@@ -891,6 +880,7 @@ class Game {
 		this.physicsObjects = [];
 		this.levelDamage = 0;
 		this.pigsCleared = false;
+		this.isEnding = false;
 
 		this.levelHealth = this.levels[id].reduce((total, obj) => {
 			const type = this.getType(obj.name);
@@ -902,9 +892,7 @@ class Game {
 		await Promise.all(
 			this.birds.map(
 				(bird, i) =>
-					new Promise((resolve) => {
-						this.spawnObj(bird, "bird", i, resolve);
-					}),
+					new Promise((resolve) => this.spawnObj(bird, "bird", i, resolve)),
 			),
 		);
 
@@ -927,29 +915,11 @@ class Game {
 		);
 
 		this.physicsObjects = [...this.pigs, ...this.boxes];
+
 		this.updateStats();
 		this.updateDestruction();
-
 		this.isPlay = true;
 		this.prepareBird();
-	}
-
-	updateStats() {
-		this.elements.birdsLeft.textContent = 3 - this.activeBirdIndex;
-		this.elements.pigsLeft.textContent = this.pigs.length;
-	}
-
-	updateDestruction() {
-		const ratio =
-			this.levelHealth > 0
-				? Math.min(this.levelDamage / this.levelHealth, 1)
-				: 0;
-
-		this.elements.destructionProgress.style.setProperty("--s", ratio);
-
-		this.elements.destructionStars.forEach((star, i) => {
-			star.classList.toggle("active", ratio >= this.starThresholds[i]);
-		});
 	}
 
 	spawnObj(obj, type, i, done = null) {
@@ -976,6 +946,10 @@ class Game {
 	async removeLevel() {
 		this.isPlay = false;
 
+		this.bodiesToRemove.forEach((b) => this.world.removeBody(b));
+		this.bodiesToRemove = [];
+		this.objectsToDestroy = [];
+
 		const all = [...this.physicsObjects, ...this.birds];
 
 		await Promise.all(
@@ -983,7 +957,7 @@ class Game {
 				(obj, i) =>
 					new Promise((resolve) => {
 						if (obj.userData.body) {
-							this.bodiesToRemove.push(obj.userData.body);
+							this.world.removeBody(obj.userData.body);
 							obj.userData.body = null;
 						}
 						obj.userData.dead = false;
@@ -1017,6 +991,72 @@ class Game {
 			ease: show ? "back.out(1.7)" : "back.in(1.7)",
 			onComplete: done,
 		});
+	}
+
+	/*-- Ui --*/
+
+	updateStats() {
+		this.elements.birdsLeft.textContent =
+			this.birds.length - this.activeBirdIndex;
+		this.elements.pigsLeft.textContent = this.pigs.length;
+	}
+
+	updateDestruction() {
+		const ratio =
+			this.levelHealth > 0
+				? Math.min(this.levelDamage / this.levelHealth, 1)
+				: 0;
+		this.elements.destructionProgress.style.setProperty("--s", ratio);
+		this.elements.destructionStars.forEach((star, i) =>
+			star.classList.toggle("active", ratio >= this.starThresholds[i]),
+		);
+	}
+
+	updateStars(destruction) {
+		if (!this.pigsCleared) return;
+
+		const earned = this.starThresholds.filter((t) => destruction >= t).length;
+		if (earned > this.stars[this.currentLevel]) {
+			this.stars[this.currentLevel] = earned;
+		}
+
+		this.elements.totalStars.textContent = Object.values(this.stars).reduce(
+			(a, b) => a + b,
+			0,
+		);
+
+		const next = this.currentLevel + 1;
+		if (this.stars[this.currentLevel] >= 1 && this.levels[next]) {
+			const nextBtn = this.elements.selectBtns[next - 1];
+			if (nextBtn) nextBtn.classList.remove("locked");
+		}
+
+		const btn = this.elements.selectBtns[this.currentLevel - 1];
+		if (btn) {
+			btn
+				.querySelectorAll(".select-btn-star")
+				.forEach((star, i) =>
+					star.classList.toggle("active", i < this.stars[this.currentLevel]),
+				);
+		}
+
+		this.saveProgress();
+	}
+
+	showResult(win) {
+		const key = win ? "win" : "lose";
+		this.playSound(this.sounds.end[key]);
+		const el = this.elements[key];
+		el.classList.add("show");
+		this.resultTimeout = setTimeout(() => el.classList.remove("show"), 4000);
+	}
+
+	/*-- Physics --*/
+
+	activateLevelPhysics() {
+		this.physicsObjects.forEach((obj) =>
+			this.createBody(obj, obj.userData.type),
+		);
 	}
 
 	createBody(obj, type) {
@@ -1066,18 +1106,21 @@ class Game {
 
 		this.world.addBody(body);
 
-		setTimeout(() => {
-			if (!obj.userData.body) return;
-			body.type = CANNON.Body.DYNAMIC;
-			body.mass = this.mass[type];
-			body.updateMassProperties();
-			body.wakeUp();
-		}, 500);
+		if (type !== "bird") {
+			setTimeout(() => {
+				if (!obj.userData.body) return;
+				body.type = CANNON.Body.DYNAMIC;
+				body.mass = this.mass[type];
+				body.updateMassProperties();
+				body.wakeUp();
+			}, 500);
+		}
 	}
 
 	damage(obj, amount) {
-		if (!obj.userData.health || obj.userData.dead || obj === this.activeBird)
-			return;
+		if (!obj.userData.health || obj.userData.dead) return;
+		if (obj === this.activeBird) return;
+
 		obj.userData.health -= amount;
 
 		if (obj.userData.type !== "bird") {
@@ -1094,20 +1137,13 @@ class Game {
 	destroy(obj) {
 		const body = obj.userData.body;
 		if (body) {
-			const px = body.position.x;
-			const py = body.position.y;
-			const pz = body.position.z;
-			const radiusSq = 10 * 10;
-
+			const { x: px, y: py, z: pz } = body.position;
 			this.world.bodies.forEach((b) => {
 				if (b === body) return;
-
 				const dx = b.position.x - px;
 				const dy = b.position.y - py;
 				const dz = b.position.z - pz;
-				const distSq = dx * dx + dy * dy + dz * dz;
-
-				if (distSq < radiusSq) b.wakeUp();
+				if (dx * dx + dy * dy + dz * dz < this.wakeRadiusSq) b.wakeUp();
 			});
 
 			this.bodiesToRemove.push(body);
@@ -1126,89 +1162,30 @@ class Game {
 		this.checkEnd();
 	}
 
-	checkEnd() {
-		if (this.pigs.length === 0 && !this.pigsCleared) {
-			this.pigsCleared = true;
-			if (this.activeBirdIndex < this.birds.length) return;
-		}
-
-		if (
-			this.activeBirdIndex >= this.birds.length &&
-			!this.activeBird &&
-			!this.isEnding
-		) {
-			const wait = () => {
-				const anyAwake = this.physicsObjects.some(
-					(obj) => obj.userData.body?.sleepState !== CANNON.Body.SLEEPING,
-				);
-				if (anyAwake) {
-					this.resultTimeout = setTimeout(wait, 50);
-				} else {
-					const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
-					this.updateStars(ratio);
-					this.isPlay = false;
-					this.resultTimeout = setTimeout(
-						() => this.showResult(this.pigsCleared),
-						500,
-					);
-				}
-			};
-			wait();
-		}
-	}
-
-	updateStars(destruction) {
-		if (!this.pigsCleared) return;
-		const earned = this.starThresholds.filter((t) => destruction >= t).length;
-		if (earned > this.stars[this.currentLevel]) {
-			this.stars[this.currentLevel] = earned;
-		}
-		const total = Object.values(this.stars).reduce((a, b) => a + b, 0);
-		this.elements.totalStars.textContent = total;
-		const nextLevel = this.currentLevel + 1;
-		if (this.stars[this.currentLevel] >= 1 && this.levels[nextLevel]) {
-			const nextBtn = this.elements.selectBtns[nextLevel - 1];
-			if (nextBtn) nextBtn.classList.remove("locked");
-		}
-		const btn = this.elements.selectBtns[this.currentLevel - 1];
-		if (btn) {
-			btn.querySelectorAll(".select-btn-star").forEach((star, i) => {
-				star.classList.toggle("active", i < this.stars[this.currentLevel]);
-			});
-		}
-		this.saveProgress();
-	}
-
-	showResult(win) {
-		const key = win ? "win" : "lose";
-		this.playSound(this.sounds.end[key]);
-		const el = this.elements[key];
-		el.classList.add("show");
-		this.resultTimeout = setTimeout(() => el.classList.remove("show"), 4000);
-	}
+	/*-- Bird --*/
 
 	prepareBird() {
 		if (this.activeBirdIndex >= this.birds.length) return;
 
 		const bird = this.birds[this.activeBirdIndex];
 		this.activeBird = bird;
+
 		this.createBody(bird, "bird");
 		document.body.classList.add("pointer");
 
 		gsap.to(bird.position, {
-			x: this.slingshotPos.x - 0.5,
+			x: this.slingshotPos.x,
 			y: this.slingshotPos.y,
 			z: this.slingshotPos.z,
 			duration: 0.5,
 			ease: "back.out(1.7)",
 			onUpdate: () => {
-				if (bird.userData.body) {
+				if (bird.userData.body)
 					bird.userData.body.position.set(
 						bird.position.x,
 						bird.position.y,
 						bird.position.z,
 					);
-				}
 			},
 		});
 	}
@@ -1216,11 +1193,14 @@ class Game {
 	shootBird(vector) {
 		if (!this.activeBird) return;
 
-		if (this.activeBirdIndex === 0) this.activateLevelPhysics();
-		document.body.classList.remove("grabbing");
-
 		const body = this.activeBird.userData.body;
 		if (!body) return;
+
+		if (this.activeBirdIndex === 0) this.activateLevelPhysics();
+
+		document.body.classList.remove("grabbing");
+
+		body.type = CANNON.Body.DYNAMIC;
 		body.mass = this.mass.bird;
 		body.updateMassProperties();
 		body.wakeUp();
@@ -1231,12 +1211,15 @@ class Game {
 		const force = vector.y * this.shootForce;
 
 		body.applyLocalImpulse(
-			new CANNON.Vec3(dir.x * force, (dir.y + 0.25) * force, dir.z * force),
+			new CANNON.Vec3(
+				dir.x * force,
+				(dir.y + this.shootArc) * force,
+				dir.z * force,
+			),
 			new CANNON.Vec3(0, 0, 0),
 		);
 
-		this.resetSlings();
-
+		this.releaseSlingshot();
 		this.physicsObjects.push(this.activeBird);
 		this.activeBird = null;
 		this.activeBirdIndex++;
@@ -1248,10 +1231,40 @@ class Game {
 		}, 2000);
 	}
 
-	activateLevelPhysics() {
-		this.physicsObjects.forEach((obj) =>
-			this.createBody(obj, obj.userData.type),
-		);
+	/*-- End --*/
+
+	checkEnd() {
+		if (this.pigs.length === 0 && !this.pigsCleared) {
+			this.pigsCleared = true;
+			if (this.activeBirdIndex < this.birds.length) return;
+		}
+
+		if (
+			this.activeBirdIndex >= this.birds.length &&
+			!this.activeBird &&
+			!this.isEnding
+		) {
+			this.isEnding = true;
+
+			const waitForSleep = () => {
+				const anyAwake = this.physicsObjects.some(
+					(obj) => obj.userData.body?.sleepState !== CANNON.Body.SLEEPING,
+				);
+				if (anyAwake) {
+					this.resultTimeout = setTimeout(waitForSleep, 50);
+					return;
+				}
+				const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
+				this.updateStars(ratio);
+				this.isPlay = false;
+				this.resultTimeout = setTimeout(
+					() => this.showResult(this.pigsCleared),
+					500,
+				);
+			};
+
+			waitForSleep();
+		}
 	}
 
 	/*-- Loop --*/
@@ -1274,20 +1287,18 @@ class Game {
 
 	updateCamera(delta) {
 		const lerpSpeed = 5 * delta;
+		const normalized = (this.camera.zoom - 1) / 3;
 
-		const zoom =
+		const targetZoom =
 			this.camera.zoom + (this.zoomTarget - this.camera.zoom) * lerpSpeed;
-		if (Math.abs(zoom - this.camera.zoom) > 0.0001) {
-			this.camera.zoom = zoom;
+		if (Math.abs(targetZoom - this.camera.zoom) > 0.0001) {
+			this.camera.zoom = targetZoom;
 			this.camera.updateProjectionMatrix();
 		}
 
-		const normalized = (this.camera.zoom - 1) / 3;
 		const factor = 1 + normalized * 3;
-
 		const targetZ = this.camTargetBase.z - this.cursor.x * factor * 10;
 		const targetY = this.camTargetBase.y - this.cursor.y * factor * 5;
-
 		this.camTarget.z += (targetZ - this.camTarget.z) * lerpSpeed;
 		this.camTarget.y += (targetY - this.camTarget.y) * lerpSpeed;
 		this.camera.lookAt(this.camTarget);
@@ -1308,7 +1319,6 @@ class Game {
 			this.bodiesToRemove.forEach((b) => this.world.removeBody(b));
 			this.bodiesToRemove = [];
 		}
-
 		if (this.objectsToDestroy.length) {
 			this.objectsToDestroy.forEach((obj) => this.destroy(obj));
 			this.objectsToDestroy = [];
@@ -1321,18 +1331,18 @@ class Game {
 			obj.quaternion.copy(body.quaternion);
 		}
 
-		if (!this.activeBird || !this.activeBird.userData.body) return;
+		if (!this.activeBird?.userData.body || !this.isDrag || !this.pullVector)
+			return;
 
-		if (this.isDrag && this.pullVector) {
-			const radius = this.pullVector.y * this.maxPull;
-			const angle = this.pullVector.x * Math.PI * 0.2;
-			const x = this.slingshotPos.x + radius;
-			const y = this.slingshotPos.y - radius * 0.5;
-			const z = this.slingshotPos.z - Math.sin(angle) * radius;
-			this.activeBird.position.set(x, y, z);
-			this.activeBird.userData.body.position.set(x, y, z);
-			this.updateSlings();
-		}
+		const radius = this.pullVector.y * this.maxPull;
+		const angle = this.pullVector.x * Math.PI * 0.25;
+		const x = this.slingshotPos.x + radius;
+		const y = this.slingshotPos.y - radius * 0.5;
+		const z = this.slingshotPos.z - Math.sin(angle) * radius;
+
+		this.activeBird.position.set(x, y, z);
+		this.activeBird.userData.body.position.set(x, y, z);
+		this.updateSlingshot();
 	}
 }
 
