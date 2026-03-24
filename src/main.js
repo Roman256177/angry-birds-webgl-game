@@ -39,14 +39,14 @@ class Game {
 			loaderText: $("loader-text"),
 			loaderPercent: $("loader-percent"),
 			loaderClick: $("loader-click"),
-			nav: $("nav"),
-			levelBtns: $$(".btn-level"),
-			soundBtn: $("btn-sound"),
-			fullscreenBtn: $("btn-fullscreen"),
-			fsIcons: $$(".icon-fs"),
+			select: $("select"),
+			selectBtns: $$(".select-btn"),
+			soundBtn: $("sound-btn"),
+			fullscreenBtn: $("fullscreen-btn"),
+			fullscreenIcons: $$(".fullscreen-icon"),
 			zoomSpans: $$("#zoom span"),
 			powerSpans: $$("#power span"),
-			closeBtn: $("btn-close"),
+			closeBtn: $("close-btn"),
 			homes: $$(".home"),
 			levels: $$(".level"),
 			birdsLeft: $("birds-left"),
@@ -54,16 +54,18 @@ class Game {
 			destructionProgress: $("destruction-progress"),
 			destructionStars: $$(".destruction-star"),
 			totalStars: $("stars-total"),
-			win: $("win"),
-			lose: $("lose"),
+			win: $("end-win"),
+			lose: $("end-lose"),
 		};
 	}
 
 	initSound() {
+		this.allSounds = [];
 		const audio = (src, volume = 1, loop = false) => {
 			const a = new Audio(src);
 			a.volume = volume;
 			a.loop = loop;
+			this.allSounds.push(a);
 			return a;
 		};
 
@@ -115,45 +117,26 @@ class Game {
 	}
 
 	initData() {
-		this.health = {
-			pig: 25,
-			wood: 50,
-			stone: 75,
-			ice: 25,
-			bird: 100,
-		};
-		this.mass = { pig: 1, wood: 2, stone: 3, ice: 1, bird: 1 };
 		this.shootForce = 40;
 		this.minImpact = 2;
 		this.maxPull = 4;
 		this.starThresholds = [0.175, 0.5, 0.825];
 		this.slingshotPos = new THREE.Vector3(27.5, 6.75, 0);
+		this.slingEndPos = new THREE.Vector3();
+
+		this.health = { pig: 25, wood: 50, stone: 75, ice: 25, bird: 100 };
+		this.mass = { pig: 1, wood: 2, stone: 3, ice: 1, bird: 1 };
+		this.physicsObjects = [];
+		this.bodiesToRemove = [];
+		this.objectsToDestroy = [];
 
 		this.snowCount = 3000;
 		this.snowArea = 300;
 		this.snowHeight = 120;
-
 		this.skyColor = new THREE.Color(0x5aaee8);
 		this.sizes = { width: window.innerWidth, height: window.innerHeight };
 		this.prevTime = 0;
-
 		this.vec3 = new THREE.Vector3();
-
-		this.isSound = false;
-		this.isCamMove = false;
-		this.isLoaded = false;
-		this.isPlay = false;
-		this.isDrag = false;
-
-		this.cursor = { x: 0, y: 0 };
-		this.dragStart = { x: 0, y: 0 };
-		this.pullVector = null;
-
-		this.zoomTarget = 1;
-		this.lastZoomSpan = -1;
-		this.lastPowerSpan = -1;
-		this.camTarget = new THREE.Vector3(2, 3, -6);
-		this.camTargetBase = null;
 
 		this.snow = null;
 		this.title = null;
@@ -161,6 +144,24 @@ class Game {
 		this.slingLeft = null;
 		this.slingRight = null;
 		this.slingMat = null;
+
+		this.cursor = { x: 0, y: 0 };
+		this.dragStart = { x: 0, y: 0 };
+		this.pullVector = null;
+
+		this.isSound = false;
+		this.isCamMove = false;
+		this.isLoaded = false;
+		this.isPlay = false;
+		this.isDrag = false;
+		this.isEnding = false;
+		this.isWheelEnabled = true;
+
+		this.camTarget = new THREE.Vector3(2, 3, -6);
+		this.camTargetBase = null;
+		this.zoomTarget = 1;
+		this.lastZoomSpan = -1;
+		this.lastPowerSpan = -1;
 
 		this.levels = { 1: [], 2: [], 3: [] };
 		this.stars = { 1: 0, 2: 0, 3: 0 };
@@ -170,11 +171,10 @@ class Game {
 		this.birds = [];
 		this.pigs = [];
 		this.boxes = [];
-		this.physicsObjects = [];
 		this.activeBird = null;
 		this.activeBirdIndex = 0;
-		this.bodiesToRemove = [];
-		this.objectsToDestroy = [];
+		this.resultTimeout = null;
+		this.pigsCleared = false;
 	}
 
 	initScene() {
@@ -229,7 +229,7 @@ class Game {
 		this.initLights();
 		this.initSnow();
 		this.initTitle();
-		this.initSlingshot();
+		this.initSlings();
 		this.initEvents();
 		this.initModel();
 		this.loop();
@@ -337,15 +337,12 @@ class Game {
 		group.add(this.title);
 	}
 
-	initSlingshot() {
-		const left = new THREE.Vector3(27.5, 6.75, 1.5);
-		const right = new THREE.Vector3(27.5, 6.75, -1.5);
-
+	initSlings() {
 		const leftGeo = new LineGeometry();
 		leftGeo.setPositions([
-			left.x,
-			left.y,
-			left.z,
+			this.slingshotPos.x,
+			this.slingshotPos.y,
+			1.5,
 			this.slingshotPos.x,
 			this.slingshotPos.y,
 			this.slingshotPos.z,
@@ -353,9 +350,9 @@ class Game {
 
 		const rightGeo = new LineGeometry();
 		rightGeo.setPositions([
-			right.x,
-			right.y,
-			right.z,
+			this.slingshotPos.x,
+			this.slingshotPos.y,
+			-1.5,
 			this.slingshotPos.x,
 			this.slingshotPos.y,
 			this.slingshotPos.z,
@@ -378,79 +375,53 @@ class Game {
 		this.scene.add(this.slingLeft, this.slingRight);
 	}
 
-	updateSlingshot() {
+	updateSlings() {
 		const pos = this.activeBird.position;
+		const sx = this.slingshotPos.x;
+		const sy = this.slingshotPos.y;
 
-		this.slingLeft.geometry.setPositions([
-			27.5,
-			6.75,
-			1.5,
-			pos.x + 0.5,
-			pos.y,
-			pos.z,
-		]);
-
-		this.slingRight.geometry.setPositions([
-			27.5,
-			6.75,
-			-1.5,
-			pos.x + 0.5,
-			pos.y,
-			pos.z,
-		]);
+		this.slingLeft.geometry.setPositions([sx, sy, 1.5, pos.x, pos.y, pos.z]);
+		this.slingRight.geometry.setPositions([sx, sy, -1.5, pos.x, pos.y, pos.z]);
+		this.slingEndPos.set(pos.x, pos.y, pos.z);
 	}
 
-	animateSlingsToSlingshot() {
-		const leftGeo = this.slingLeft.geometry;
-		const rightGeo = this.slingRight.geometry;
-		const startLeft = new THREE.Vector3();
-		const startRight = new THREE.Vector3();
-
-		// získat aktuální koncový bod (index 1) ze setPositions
-		const leftPositions = leftGeo.attributes.position.array;
-		startLeft.set(leftPositions[3], leftPositions[4], leftPositions[5]);
-
-		const rightPositions = rightGeo.attributes.position.array;
-		startRight.set(rightPositions[3], rightPositions[4], rightPositions[5]);
-
+	resetSlings() {
+		const startLeft = this.slingEndPos.clone();
+		const startRight = this.slingEndPos.clone();
 		const target = this.slingshotPos;
 
-		// Levý sling
 		gsap.to(startLeft, {
 			x: target.x,
 			y: target.y,
 			z: target.z,
-			duration: 0.5,
+			duration: 1,
 			ease: "elastic.out(1,0.5)",
-			onUpdate: () => {
-				leftGeo.setPositions([
-					27.5,
-					6.75,
-					1.5, // start point pevný
+			onUpdate: () =>
+				this.slingLeft.geometry.setPositions([
+					this.slingshotPos.x,
+					this.slingshotPos.y,
+					1.5,
 					startLeft.x,
 					startLeft.y,
-					startLeft.z, // animovaný konec
-				]);
-			},
+					startLeft.z,
+				]),
 		});
 
-		// Pravý sling
 		gsap.to(startRight, {
 			x: target.x,
 			y: target.y,
 			z: target.z,
-			duration: 0.5,
+			duration: 1,
 			ease: "elastic.out(1,0.5)",
-			onUpdate: () => {
-				rightGeo.setPositions([
-					27.5,
-					6.75,
-					-1.5, // start point pevný
+			onUpdate: () =>
+				this.slingRight.geometry.setPositions([
+					this.slingshotPos.x,
+					this.slingshotPos.y,
+					-1.5,
 					startRight.x,
 					startRight.y,
-					startRight.z, // animovaný konec
-				]);
-			},
+					startRight.z,
+				]),
 		});
 	}
 
@@ -488,8 +459,10 @@ class Game {
 		});
 
 		window.addEventListener("mousedown", (e) => {
-			if (!this.isPlay || !this.activeBird) return;
-			document.body.classList.add("dragging");
+			if (!this.isPlay || !this.activeBird || e.target.closest("button"))
+				return;
+			document.body.classList.remove("pointer");
+			document.body.classList.add("grabbing");
 			this.playSound(this.sounds.slingshot.stretch);
 			this.isDrag = true;
 			this.dragStart = { x: e.clientX, y: e.clientY };
@@ -498,13 +471,14 @@ class Game {
 
 		window.addEventListener("mouseup", () => {
 			if (!this.isDrag) return;
-			document.body.classList.remove("dragging");
+			document.body.classList.remove("grabbing");
 			this.isDrag = false;
 
 			if (this.pullVector && this.pullVector.y > 0.2) {
 				this.shootBird(this.pullVector);
 				this.playSound(this.sounds.slingshot.shoot);
 			} else if (this.activeBird) {
+				document.body.classList.add("pointer");
 				gsap.to(this.activeBird.position, {
 					x: this.slingshotPos.x,
 					y: this.slingshotPos.y,
@@ -519,6 +493,7 @@ class Game {
 								this.activeBird.position.z,
 							);
 						}
+						this.updateSlings();
 					},
 				});
 			}
@@ -531,7 +506,7 @@ class Game {
 		window.addEventListener(
 			"wheel",
 			(e) => {
-				if (!this.isCamMove) return;
+				if (!this.isCamMove || !this.isWheelEnabled) return;
 				this.zoomTarget += e.deltaY * -0.001;
 				this.zoomTarget = this.clamp(this.zoomTarget, 1, 4);
 			},
@@ -548,7 +523,9 @@ class Game {
 		this.elements.fullscreenBtn.addEventListener("click", () => {
 			if (document.fullscreenElement) document.exitFullscreen();
 			else document.documentElement.requestFullscreen();
-			this.elements.fsIcons.forEach((el) => el.classList.toggle("active"));
+			this.elements.fullscreenIcons.forEach((f) =>
+				f.classList.toggle("active"),
+			);
 			this.playSound(this.sounds.ui.click);
 		});
 
@@ -557,7 +534,7 @@ class Game {
 			this.playSound(this.sounds.ui.click);
 		});
 
-		this.elements.levelBtns.forEach((btn) => {
+		this.elements.selectBtns.forEach((btn) => {
 			btn.addEventListener("mouseenter", () => {
 				if (!btn.classList.contains("locked"))
 					this.playSound(this.sounds.ui.hover);
@@ -603,8 +580,10 @@ class Game {
 	}
 
 	soundOff() {
-		this.sounds.music.pause();
-		this.sounds.random.forEach((s) => s.pause());
+		this.allSounds.forEach((s) => {
+			s.pause();
+			if (!s.loop) s.currentTime = 0;
+		});
 	}
 
 	initRandomSounds() {
@@ -678,7 +657,7 @@ class Game {
 
 	async boot() {
 		await this.wait(1000);
-		this.setProgress(0.24);
+		this.setProgress(0.29);
 		await this.wait(1500);
 		this.setProgress(0.67);
 		await this.wait(1500);
@@ -744,15 +723,15 @@ class Game {
 		this.stars = JSON.parse(saved);
 
 		Object.entries(this.stars).forEach(([level, earned]) => {
-			const btn = this.elements.levelBtns[level - 1];
+			const btn = this.elements.selectBtns[level - 1];
 			if (!btn) return;
 
-			btn.querySelectorAll(".btn-level-star").forEach((star, i) => {
+			btn.querySelectorAll(".select-btn-star").forEach((star, i) => {
 				star.classList.toggle("active", i < earned);
 			});
 
-			if (earned >= 1) {
-				const nextBtn = this.elements.levelBtns[level];
+			if (earned > 0) {
+				const nextBtn = this.elements.selectBtns[level];
 				if (nextBtn) nextBtn.classList.remove("locked");
 			}
 		});
@@ -765,8 +744,8 @@ class Game {
 		localStorage.removeItem("stars");
 		this.stars = { 1: 0, 2: 0, 3: 0 };
 
-		this.elements.levelBtns.forEach((btn) => {
-			btn.querySelectorAll(".btn-level-star").forEach((star) => {
+		this.elements.selectBtns.forEach((btn) => {
+			btn.querySelectorAll(".select-btn-star").forEach((star) => {
 				star.classList.remove("active");
 			});
 			if (parseInt(btn.dataset.level) > 1) {
@@ -854,23 +833,53 @@ class Game {
 	async changeToLevel(id) {
 		gsap.to(this.sounds.music, { volume: 0.1, duration: 1 });
 		this.showTitle(false);
-		this.elements.nav.classList.remove("show");
+		this.elements.select.classList.remove("show");
 		this.setupLevel(id);
 		this.enableCamMove(false);
+		this.resetZoom();
 		await this.animateCamera(50, 13, 0, 0, 6, 0);
 		this.enableCamMove(true);
 		this.stagger(this.elements.levels, true);
 	}
 
 	async changeToHome() {
+		clearTimeout(this.resultTimeout);
+		this.elements.win.classList.remove("show");
+		this.elements.lose.classList.remove("show");
+
+		this.sounds.end.win.pause();
+		this.sounds.end.win.currentTime = 0;
+		this.sounds.end.lose.pause();
+		this.sounds.end.lose.currentTime = 0;
+
+		if (this.pigsCleared && this.currentLevel) {
+			const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
+			this.updateStars(ratio);
+		}
+
 		gsap.to(this.sounds.music, { volume: 0.35, duration: 1 });
 		this.showTitle();
 		this.stagger(this.elements.levels, false);
 		this.removeLevel();
 		this.enableCamMove(false);
+		this.resetZoom();
 		await this.animateCamera(60, 4, 0, 0, 11, 0);
 		this.enableCamMove(true);
-		this.elements.nav.classList.add("show");
+		this.elements.select.classList.add("show");
+	}
+
+	resetZoom() {
+		this.isWheelEnabled = false;
+		this.zoomTarget = 1;
+		this.lastZoomSpan = -1;
+		this.elements.zoomSpans.forEach((z) => z.classList.remove("active"));
+		gsap.to(this.camera, {
+			zoom: 1,
+			duration: 1,
+			ease: "power1.inOut",
+			onUpdate: () => this.camera.updateProjectionMatrix(),
+			onComplete: () => (this.isWheelEnabled = true),
+		});
 	}
 
 	async setupLevel(id) {
@@ -881,6 +890,7 @@ class Game {
 		this.boxes = [];
 		this.physicsObjects = [];
 		this.levelDamage = 0;
+		this.pigsCleared = false;
 
 		this.levelHealth = this.levels[id].reduce((total, obj) => {
 			const type = this.getType(obj.name);
@@ -925,8 +935,7 @@ class Game {
 	}
 
 	updateStats() {
-		this.elements.birdsLeft.textContent =
-			this.birds.length - this.activeBirdIndex;
+		this.elements.birdsLeft.textContent = 3 - this.activeBirdIndex;
 		this.elements.pigsLeft.textContent = this.pigs.length;
 	}
 
@@ -936,7 +945,7 @@ class Game {
 				? Math.min(this.levelDamage / this.levelHealth, 1)
 				: 0;
 
-		this.elements.destructionProgress.style.setProperty("--d", ratio);
+		this.elements.destructionProgress.style.setProperty("--s", ratio);
 
 		this.elements.destructionStars.forEach((star, i) => {
 			star.classList.toggle("active", ratio >= this.starThresholds[i]);
@@ -946,14 +955,12 @@ class Game {
 	spawnObj(obj, type, i, done = null) {
 		obj.userData.dead = false;
 		obj.userData.health = this.health[type];
+		obj.userData.type = type;
 		obj.position.copy(obj.userData.origin.position);
 		obj.quaternion.copy(obj.userData.origin.quaternion);
 		obj.scale.set(0, 0, 0);
 		this.scene.add(obj);
-		this.animateObj(obj, true, i, () => {
-			if (type !== "bird") this.createBody(obj, type);
-			done?.();
-		});
+		this.animateObj(obj, true, i, () => done?.());
 		this.playSound(this.sounds[type]?.add ?? this.sounds.add);
 	}
 
@@ -996,6 +1003,8 @@ class Game {
 		this.currentLevel = null;
 		this.levelHealth = 0;
 		this.levelDamage = 0;
+		this.pigsCleared = false;
+		this.isEnding = false;
 	}
 
 	animateObj(obj, show, i, done = null) {
@@ -1039,8 +1048,8 @@ class Game {
 		obj.getWorldPosition(this.vec3);
 		body.position.set(this.vec3.x, this.vec3.y, this.vec3.z);
 		body.allowSleep = true;
-		body.sleepSpeedLimit = 0.5;
-		body.sleepTimeLimit = 1.0;
+		body.sleepSpeedLimit = 0.2;
+		body.sleepTimeLimit = 0.8;
 
 		obj.userData.body = body;
 		obj.userData.type = type;
@@ -1052,7 +1061,7 @@ class Game {
 			const dmg = Math.abs(impact) * 4;
 			this.damage(obj, dmg);
 			if (e.body.userData?.obj) this.damage(e.body.userData.obj, dmg * 0.5);
-			this.playSound(this.sounds[type].collide);
+			this.playSound(this.sounds[type]?.collide);
 		});
 
 		this.world.addBody(body);
@@ -1067,7 +1076,8 @@ class Game {
 	}
 
 	damage(obj, amount) {
-		if (!obj.userData.health || obj.userData.dead) return;
+		if (!obj.userData.health || obj.userData.dead || obj === this.activeBird)
+			return;
 		obj.userData.health -= amount;
 
 		if (obj.userData.type !== "bird") {
@@ -1076,10 +1086,6 @@ class Game {
 		}
 
 		if (obj.userData.health <= 0) {
-			if (obj.userData.type === "bird" && !obj.userData.isShot) {
-				obj.userData.health = this.health.bird;
-				return;
-			}
 			obj.userData.dead = true;
 			this.objectsToDestroy.push(obj);
 		}
@@ -1121,27 +1127,30 @@ class Game {
 	}
 
 	checkEnd() {
-		// Výhra: všechna prasata pryč
-		if (this.pigs.length === 0) {
-			const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
-			this.updateStars(ratio); // teprve tady do level btn a total stars
-			this.isPlay = false;
-			setTimeout(() => this.showResult(true), 1000);
-			return;
+		if (this.pigs.length === 0 && !this.pigsCleared) {
+			this.pigsCleared = true;
+			if (this.activeBirdIndex < this.birds.length) return;
 		}
 
-		// Prohra: žádní zbývající ptáci, prasata stále na místě
-		if (this.activeBirdIndex >= this.birds.length && !this.activeBird) {
+		if (
+			this.activeBirdIndex >= this.birds.length &&
+			!this.activeBird &&
+			!this.isEnding
+		) {
 			const wait = () => {
 				const anyAwake = this.physicsObjects.some(
 					(obj) => obj.userData.body?.sleepState !== CANNON.Body.SLEEPING,
 				);
 				if (anyAwake) {
-					setTimeout(wait, 50);
+					this.resultTimeout = setTimeout(wait, 50);
 				} else {
-					// Nevoláme updateStars, protože není výhra
+					const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
+					this.updateStars(ratio);
 					this.isPlay = false;
-					setTimeout(() => this.showResult(false), 1000);
+					this.resultTimeout = setTimeout(
+						() => this.showResult(this.pigsCleared),
+						500,
+					);
 				}
 			};
 			wait();
@@ -1149,46 +1158,42 @@ class Game {
 	}
 
 	updateStars(destruction) {
+		if (!this.pigsCleared) return;
 		const earned = this.starThresholds.filter((t) => destruction >= t).length;
-
 		if (earned > this.stars[this.currentLevel]) {
 			this.stars[this.currentLevel] = earned;
 		}
-
 		const total = Object.values(this.stars).reduce((a, b) => a + b, 0);
 		this.elements.totalStars.textContent = total;
-
 		const nextLevel = this.currentLevel + 1;
 		if (this.stars[this.currentLevel] >= 1 && this.levels[nextLevel]) {
-			const nextBtn = this.elements.levelBtns[nextLevel - 1];
+			const nextBtn = this.elements.selectBtns[nextLevel - 1];
 			if (nextBtn) nextBtn.classList.remove("locked");
 		}
-
-		const btn = this.elements.levelBtns[this.currentLevel - 1];
+		const btn = this.elements.selectBtns[this.currentLevel - 1];
 		if (btn) {
-			btn.querySelectorAll(".btn-level-star").forEach((star, i) => {
+			btn.querySelectorAll(".select-btn-star").forEach((star, i) => {
 				star.classList.toggle("active", i < this.stars[this.currentLevel]);
 			});
 		}
-
 		this.saveProgress();
 	}
 
 	showResult(win) {
 		const key = win ? "win" : "lose";
 		this.playSound(this.sounds.end[key]);
-
 		const el = this.elements[key];
 		el.classList.add("show");
-		setTimeout(() => el.classList.remove("show"), 4000);
+		this.resultTimeout = setTimeout(() => el.classList.remove("show"), 4000);
 	}
 
 	prepareBird() {
 		if (this.activeBirdIndex >= this.birds.length) return;
 
 		const bird = this.birds[this.activeBirdIndex];
-		bird.userData.isShot = false;
 		this.activeBird = bird;
+		this.createBody(bird, "bird");
+		document.body.classList.add("pointer");
 
 		gsap.to(bird.position, {
 			x: this.slingshotPos.x - 0.5,
@@ -1196,16 +1201,26 @@ class Game {
 			z: this.slingshotPos.z,
 			duration: 0.5,
 			ease: "back.out(1.7)",
-			onComplete: () => this.createBody(bird, "bird"),
+			onUpdate: () => {
+				if (bird.userData.body) {
+					bird.userData.body.position.set(
+						bird.position.x,
+						bird.position.y,
+						bird.position.z,
+					);
+				}
+			},
 		});
 	}
 
 	shootBird(vector) {
 		if (!this.activeBird) return;
 
-		this.activeBird.userData.isShot = true;
+		if (this.activeBirdIndex === 0) this.activateLevelPhysics();
+		document.body.classList.remove("grabbing");
 
 		const body = this.activeBird.userData.body;
+		if (!body) return;
 		body.mass = this.mass.bird;
 		body.updateMassProperties();
 		body.wakeUp();
@@ -1216,15 +1231,11 @@ class Game {
 		const force = vector.y * this.shootForce;
 
 		body.applyLocalImpulse(
-			new CANNON.Vec3(
-				dir.x * force,
-				dir.y * force + force * 0.3,
-				dir.z * force,
-			),
+			new CANNON.Vec3(dir.x * force, (dir.y + 0.25) * force, dir.z * force),
 			new CANNON.Vec3(0, 0, 0),
 		);
 
-		this.animateSlingsToSlingshot();
+		this.resetSlings();
 
 		this.physicsObjects.push(this.activeBird);
 		this.activeBird = null;
@@ -1235,6 +1246,12 @@ class Game {
 			if (this.activeBirdIndex < this.birds.length) this.prepareBird();
 			else this.checkEnd();
 		}, 2000);
+	}
+
+	activateLevelPhysics() {
+		this.physicsObjects.forEach((obj) =>
+			this.createBody(obj, obj.userData.type),
+		);
 	}
 
 	/*-- Loop --*/
@@ -1314,9 +1331,8 @@ class Game {
 			const z = this.slingshotPos.z - Math.sin(angle) * radius;
 			this.activeBird.position.set(x, y, z);
 			this.activeBird.userData.body.position.set(x, y, z);
+			this.updateSlings();
 		}
-
-		this.updateSlingshot();
 	}
 }
 

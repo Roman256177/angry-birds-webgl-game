@@ -12,13 +12,11 @@
 	--duration: .5s;
 	--duration-fast: .25s;
 	--ease: ease;
-	--font-size-ui: 1.5rem;
 	--gap: 2rem;
 	--gray: #ccc;
 	--pill-border: 1px solid var(--white-50);
 	--pill-height: 46px;
 	--pill-width: 180px;
-	--red: #ea002a;
 	--transition: opacity var(--duration) var(--ease), transform var(--duration) var(--ease);
 	--transition-fast: opacity var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
 	--white-50: #ffffff50;
@@ -39,7 +37,7 @@ body.pointer {
 	cursor: pointer;
 }
 
-body.dragging {
+body.grabbing {
 	cursor: grabbing;
 }
 
@@ -86,17 +84,16 @@ body.dragging {
 #loader-text {
 	display: flex;
 	justify-content: space-between;
-	transition: var(--transition);
+	transition: inherit;
 }
 
 #loader-click {
 	align-items: center;
 	display: flex;
-	gap: 1rem;
 	justify-content: space-between;
 	opacity: 0;
 	transform: translateY(-1rem);
-	transition: var(--transition);
+	transition: inherit;
 }
 
 #loader-click.show {
@@ -104,11 +101,11 @@ body.dragging {
 	transform: translateY(0);
 }
 
-#loader-click-star {
-	animation: click 2s infinite;
+#loader-click-icon {
+	animation: pulse 2s infinite;
 }
 
-@keyframes click {
+@keyframes pulse {
 
 	0%,
 	20%,
@@ -125,13 +122,13 @@ body.dragging {
 
 #ui {
 	color: #fff;
-	font-size: var(--font-size-ui);
+	font-size: 1.5rem;
 	inset: 0;
 	position: fixed;
 	z-index: 1;
 }
 
-/*-- Total stars --*/
+/*-- Stars --*/
 
 #stars {
 	align-items: center;
@@ -145,9 +142,9 @@ body.dragging {
 	width: var(--pill-width);
 }
 
-/*-- Level select --*/
+/*-- Select --*/
 
-#nav {
+#select {
 	bottom: var(--gap);
 	display: flex;
 	left: 50%;
@@ -156,45 +153,43 @@ body.dragging {
 	width: 270px;
 }
 
-.btn-level {
+.select-btn {
 	display: grid;
 	flex: 1;
-	height: 100%;
 	overflow: hidden;
 	place-items: center;
-	position: relative;
 }
 
-.btn-level.locked {
+.select-btn.locked {
 	cursor: not-allowed;
 }
 
-.btn-level-number {
+.select-btn-level {
 	transition: var(--transition-fast);
 }
 
-.btn-level-stars {
+.select-btn-stars {
 	display: flex;
 	gap: .25rem;
 	grid-area: 1 / 1;
 }
 
-.btn-level-star {
+.select-btn-star {
 	color: var(--white-50);
 	opacity: 0;
 	transform: translateY(1rem);
 	transition: var(--transition-fast);
 }
 
-.btn-level-star:nth-of-type(2) {
+.select-btn-star:nth-of-type(2) {
 	transition-delay: 50ms;
 }
 
-.btn-level-star:nth-of-type(3) {
+.select-btn-star:nth-of-type(3) {
 	transition-delay: 100ms;
 }
 
-.btn-level:hover:not(.locked) .btn-level-star {
+.select-btn:hover:not(.locked) .select-btn-star {
 	opacity: 1;
 	transform: translateY(0) rotate(180deg);
 }
@@ -210,14 +205,13 @@ body.dragging {
 	width: var(--pill-width);
 }
 
-#btn-sound {
+#sound-btn {
 	flex: 1;
 	gap: .25rem;
-	height: 100%;
 }
 
-#btn-sound span {
-	animation: sound .75s infinite ease-in-out;
+#sound-btn span {
+	animation: sound 1s infinite;
 	animation-play-state: paused;
 	background-color: #fff;
 	border-radius: var(--bar-size);
@@ -225,16 +219,16 @@ body.dragging {
 	width: var(--bar-size);
 }
 
-#btn-sound.active span {
+#sound-btn.active span {
 	animation-play-state: running;
 }
 
-#btn-sound span:nth-of-type(2) {
-	animation-delay: .4s;
+#sound-btn span:nth-of-type(2) {
+	animation-delay: 500ms;
 }
 
-#btn-sound span:nth-of-type(3) {
-	animation-delay: .2s;
+#sound-btn span:nth-of-type(3) {
+	animation-delay: 250ms;
 }
 
 @keyframes sound {
@@ -249,21 +243,20 @@ body.dragging {
 	}
 }
 
-#btn-fullscreen {
+#fullscreen-btn {
 	flex: 1;
-	height: 100%;
 }
 
-.icon-fs {
+.fullscreen-icon {
 	opacity: 0;
 	transition: opacity var(--duration) var(--ease);
 }
 
-.icon-fs.active {
+.fullscreen-icon.active {
 	opacity: 1;
 }
 
-/*-- Zoom + Power indicators --*/
+/*-- Zoom + Power --*/
 
 #zoom,
 #power {
@@ -293,12 +286,21 @@ body.dragging {
 	transform: scaleX(0);
 }
 
+#zoom span {
+	transform-origin: right;
+	width: 1rem;
+}
+
+#power span {
+	transform-origin: left;
+}
+
 #zoom span::before,
 #power span::before {
 	background-color: #fff;
-	border-radius: var(--bar-size);
+	border-radius: inherit;
 	content: "";
-	height: var(--bar-size);
+	height: inherit;
 	inset: 0;
 	position: absolute;
 	transform: scaleX(0);
@@ -313,17 +315,8 @@ body.dragging {
 	transform: scaleX(1);
 }
 
-#zoom span {
-	transform-origin: right;
-	width: 1rem;
-}
-
 #zoom span:nth-of-type(3n+1) {
 	width: 1.5rem;
-}
-
-#power span {
-	transform-origin: left;
 }
 
 #power span:nth-of-type(1) {
@@ -379,8 +372,7 @@ body.dragging {
 	transform: translate(-50%, -1rem);
 }
 
-#birds,
-#pigs {
+.characters {
 	align-items: center;
 	display: flex;
 	gap: .5rem;
@@ -414,30 +406,29 @@ body.dragging {
 	content: "";
 	inset: 0;
 	position: absolute;
-	transform: scaleX(var(--d, 0));
+	transform: scaleX(var(--s, 0));
 	transform-origin: left;
 	transition: transform var(--duration) var(--ease);
 }
 
-#btn-close {
+#close-btn {
 	border-radius: 0 var(--pill-height) var(--pill-height) 0;
-	height: 100%;
 	margin: 0 calc(-1 * var(--gap));
 	padding: 0 var(--gap);
 }
 
-#btn-close svg {
+#close-btn svg {
 	transition: transform var(--duration-fast) var(--ease);
 }
 
-#btn-close:hover svg {
+#close-btn:hover svg {
 	transform: rotate(90deg);
 }
 
 /*-- End --*/
 
-#win,
-#lose {
+#end-win,
+#end-lose {
 	position: absolute;
 	left: 50%;
 	top: 50%;
@@ -446,16 +437,16 @@ body.dragging {
 	pointer-events: none;
 	opacity: 0;
 	transition: var(--transition);
-	letter-spacing: 8px;
+	letter-spacing: .5rem;
 }
 
-#win.show,
-#lose.show {
-	transform: translate(-50%, -50%);
+#end-win.show,
+#end-lose.show {
 	opacity: 1;
+	transform: translate(-50%, -50%);
 }
 
-/*-- WebGL canvas --*/
+/*-- WebGL --*/
 
 #webgl {
 	inset: 0;
@@ -474,9 +465,10 @@ button {
 	display: flex;
 	font: inherit;
 	justify-content: center;
+	height: 100%;
 }
 
-.font-size-default {
+.text-default {
 	font-size: 1rem;
 }
 
@@ -506,28 +498,28 @@ button {
 	pointer-events: auto;
 }
 
-.btn-level-star.active,
+.select-btn-star.active,
 .destruction-star.active {
 	color: #fff;
 }
 
 #loader.hide,
-.btn-level:not(.locked) .btn-level-lock {
+.select-btn:not(.locked) .select-btn-lock {
 	opacity: 0;
 }
 
 #loader-inner.hide,
 #loader-text.hide,
-.btn-level.locked .btn-level-number,
-.btn-level:hover .btn-level-number {
+.select-btn.locked .select-btn-level,
+.select-btn:hover .select-btn-level {
 	opacity: 0;
 	transform: translateY(1rem);
 }
 
 #loader-loading,
 #loader-loaded,
-.btn-level-number,
-.btn-level-lock {
+.select-btn-level,
+.select-btn-lock {
 	grid-area: 1 / 1;
 }
 
@@ -537,6 +529,6 @@ button {
 }
 
 #level.show,
-#nav.show {
+#select.show {
 	transform: translate(-50%, 0);
 }
