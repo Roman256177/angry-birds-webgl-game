@@ -123,7 +123,7 @@ class Game {
 		this.minImpact = 2;
 		this.maxPull = 4;
 		this.shootArc = 0.25;
-		this.wakeRadiusSq = 10;
+		this.wakeRadiusSq = 20;
 		this.starThresholds = [0.175, 0.5, 0.825];
 		this.slingshotPos = new THREE.Vector3(27.5, 6.75, 0);
 
@@ -672,7 +672,6 @@ class Game {
 		await this.animateCamera(60, 4, 0, 0, 11, 0);
 		this.elements.loader.classList.add("remove");
 
-		this.loadProgress();
 		await this.showTitle();
 		this.enableCamMove();
 		this.stagger(this.elements.homes, true);
@@ -786,51 +785,6 @@ class Game {
 				0,
 			);
 		});
-	}
-
-	/*-- Progress --*/
-
-	saveProgress() {
-		localStorage.setItem("stars", JSON.stringify(this.stars));
-	}
-
-	loadProgress() {
-		const saved = localStorage.getItem("stars");
-		if (!saved) return;
-
-		this.stars = JSON.parse(saved);
-
-		Object.entries(this.stars).forEach(([level, earned]) => {
-			const lvl = parseInt(level);
-			const btn = this.elements.selectBtns[lvl - 1];
-			if (!btn) return;
-
-			btn
-				.querySelectorAll(".select-btn-star")
-				.forEach((star, i) => star.classList.toggle("active", i < earned));
-
-			if (earned > 0) {
-				const next = this.elements.selectBtns[lvl];
-				if (next) next.classList.remove("locked");
-			}
-		});
-
-		this.elements.totalStars.textContent = Object.values(this.stars).reduce(
-			(a, b) => a + b,
-			0,
-		);
-	}
-
-	resetProgress() {
-		localStorage.removeItem("stars");
-		this.stars = { 1: 0, 2: 0, 3: 0 };
-		this.elements.selectBtns.forEach((btn) => {
-			btn
-				.querySelectorAll(".select-btn-star")
-				.forEach((s) => s.classList.remove("active"));
-			if (parseInt(btn.dataset.level) > 1) btn.classList.add("locked");
-		});
-		this.elements.totalStars.textContent = 0;
 	}
 
 	/*-- Level --*/
@@ -1039,8 +993,6 @@ class Game {
 					star.classList.toggle("active", i < this.stars[this.currentLevel]),
 				);
 		}
-
-		this.saveProgress();
 	}
 
 	showResult(win) {
