@@ -22,10 +22,8 @@ body {
 	--color-white-50: #ffffff50;
 	--color-black: #000000;
 	--color-gray: #cccccc;
-
 	--font-size-base: 1rem;
 	--font-size-ui: 1.5rem;
-
 	--gap: 2rem;
 	--pill-height: 46px;
 	--pill-width: 180px;
@@ -73,6 +71,14 @@ button {
 	background-color: var(--color-white-50);
 }
 
+.icon {
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	fill: none;
+	stroke: currentColor;
+}
+
 .pill {
 	height: var(--pill-height);
 	backdrop-filter: var(--blur);
@@ -93,18 +99,6 @@ button {
 	pointer-events: auto;
 }
 
-#loader-loading,
-#loader-loaded,
-.select-btn-level,
-.select-btn-lock {
-	grid-area: 1 / 1;
-}
-
-.select-btn-star.active,
-.destruction-star.active {
-	color: var(--color-white);
-}
-
 /*-- Loader --*/
 
 #loader {
@@ -113,6 +107,7 @@ button {
 	z-index: 9999;
 	display: grid;
 	place-items: center;
+	color: var(--color-black);
 	background-color: var(--color-white);
 	transition: opacity 1s var(--ease);
 }
@@ -128,7 +123,7 @@ button {
 #loader-inner {
 	display: flex;
 	flex-direction: column;
-	gap: .5rem;
+	gap: 0.5rem;
 	transition: var(--transition);
 }
 
@@ -175,8 +170,8 @@ button {
 	transform: translateY(0);
 }
 
-#loader-click-icon {
-	animation: pulse 2s infinite;
+#loader-click .icon {
+	animation: click 2s infinite;
 }
 
 /*-- Game --*/
@@ -189,26 +184,7 @@ button {
 	font-size: var(--font-size-ui);
 }
 
-#end-win,
-#end-lose {
-	position: absolute;
-	left: 50%;
-	top: 50%;
-	transform: translate(-50%, calc(-50% + 1rem));
-	font-size: 5rem;
-	letter-spacing: 0.5rem;
-	opacity: 0;
-	pointer-events: none;
-	transition: var(--transition);
-}
-
-#end-win.show,
-#end-lose.show {
-	opacity: 1;
-	transform: translate(-50%, -50%);
-}
-
-/*-- Stars --*/
+/*-- Total stars --*/
 
 #stars {
 	position: absolute;
@@ -216,17 +192,17 @@ button {
 	left: var(--gap);
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	gap: var(--gap);
 	width: var(--pill-width);
 	transform: translateY(1rem);
-	justify-content: center;
 }
 
 #stars.show {
 	transform: translateY(0);
 }
 
-/*-- Select --*/
+/*-- Level select --*/
 
 #select {
 	position: absolute;
@@ -252,23 +228,29 @@ button {
 	cursor: not-allowed;
 }
 
-.select-btn:not(.locked) .select-btn-lock {
-	opacity: 0;
+.select-btn-lock {
+	color: var(--color-white-50);
+	grid-area: 1 / 1;
 }
 
-.select-btn.locked .select-btn-level,
-.select-btn:hover .select-btn-level {
+.select-btn:not(.locked) .select-btn-lock {
+	display: none;
+}
+
+.select-btn-number {
+	grid-area: 1 / 1;
+	transition: var(--transition-fast);
+}
+
+.select-btn.locked .select-btn-number,
+.select-btn:hover .select-btn-number {
 	opacity: 0;
 	transform: translateY(1rem);
 }
 
-.select-btn-level {
-	transition: var(--transition-fast);
-}
-
 .select-btn-stars {
 	display: flex;
-	gap: .25rem;
+	gap: 0.25rem;
 	grid-area: 1 / 1;
 }
 
@@ -277,6 +259,10 @@ button {
 	opacity: 0;
 	transform: translateY(1rem);
 	transition: var(--transition-fast);
+}
+
+.select-btn-star.active {
+	color: var(--color-white);
 }
 
 .select-btn-star:nth-of-type(2) {
@@ -309,7 +295,7 @@ button {
 
 #sound-btn {
 	flex: 1;
-	gap: .25rem;
+	gap: 0.25rem;
 }
 
 #sound-btn span {
@@ -335,63 +321,87 @@ button {
 
 #fullscreen-btn {
 	flex: 1;
+	display: grid;
+	place-items: center;
 }
 
-.fullscreen-icon {
+.fullscreen {
 	opacity: 0;
+	grid-area: 1 / 1;
 	transition: opacity var(--duration) var(--ease);
 }
 
-.fullscreen-icon.active {
+.fullscreen.active {
 	opacity: 1;
 }
 
-/*-- Zoom + Power  --*/
+/*-- Zoom + Power indicators --*/
 
-#zoom {
-	position: absolute;
-	top: 50%;
-	right: var(--gap);
-	display: flex;
-	flex-direction: column-reverse;
-	align-items: flex-end;
-	gap: 1rem;
-	transform: translateY(-50%);
-}
-
-#zoom span {
-	position: relative;
-	height: var(--bar-size);
-	border-radius: var(--bar-size);
-	background-color: var(--color-white-80);
-	transform: scaleX(0);
-	transform-origin: right;
-}
-
-#zoom span:nth-of-type(3n+1) {
-	width: 1.5rem;
-}
-
-#zoom span:not(:nth-of-type(3n+1)) {
-	width: 1rem;
-}
-
+#zoom,
 #power {
 	position: absolute;
 	top: 50%;
-	left: var(--gap);
 	display: flex;
 	flex-direction: column-reverse;
 	gap: 1rem;
 	transform: translateY(-50%);
 }
 
+#zoom {
+	right: var(--gap);
+	align-items: flex-end;
+}
+
+#power {
+	left: var(--gap);
+}
+
+#zoom span,
 #power span {
 	position: relative;
 	height: var(--bar-size);
 	border-radius: var(--bar-size);
 	background-color: var(--color-white-80);
 	transform: scaleX(0);
+	transition: transform var(--duration) var(--ease);
+}
+
+#zoom span::before,
+#power span::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	height: inherit;
+	border-radius: inherit;
+	background-color: var(--color-white);
+	transform: scaleX(0);
+	transform-origin: inherit;
+	transition: inherit;
+}
+
+#zoom span.show,
+#power span.show {
+	transform: scaleX(1);
+}
+
+#zoom span.active::before,
+#power span.active::before {
+	transform: scaleX(1);
+}
+
+#zoom span {
+	width: 1rem;
+}
+
+#zoom span:nth-of-type(3n+1) {
+	width: 1.5rem;
+}
+
+#zoom span {
+	transform-origin: right;
+}
+
+#power span {
 	transform-origin: left;
 }
 
@@ -435,34 +445,6 @@ button {
 	width: 2.00rem;
 }
 
-#zoom span,
-#power span {
-	transition: transform var(--duration) var(--ease);
-}
-
-#zoom span::before,
-#power span::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	height: inherit;
-	border-radius: inherit;
-	background-color: var(--color-white);
-	transform: scaleX(0);
-	transform-origin: inherit;
-	transition: inherit;
-}
-
-#zoom span.show,
-#power span.show {
-	transform: scaleX(1);
-}
-
-#zoom span.active::before,
-#power span.active::before {
-	transform: scaleX(1);
-}
-
 /*-- Level --*/
 
 #level {
@@ -480,16 +462,16 @@ button {
 	transform: translate(-50%, 0);
 }
 
-.characters {
+.character {
 	display: flex;
 	align-items: center;
-	gap: .5rem;
+	gap: 0.5rem;
 }
 
 #destruction {
 	display: flex;
 	flex-direction: column;
-	gap: .25rem;
+	gap: 0.25rem;
 }
 
 #destruction-stars {
@@ -499,6 +481,10 @@ button {
 
 .destruction-star {
 	color: var(--color-white-80);
+}
+
+.destruction-star.active {
+	color: var(--color-white);
 }
 
 #destruction-progress {
@@ -533,7 +519,28 @@ button {
 	transform: rotate(90deg);
 }
 
-/*-- WebGL --*/
+/*-- Result --*/
+
+#win,
+#lose {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	font-size: 5rem;
+	letter-spacing: 0.5rem;
+	opacity: 0;
+	pointer-events: none;
+	transform: translate(-50%, calc(-50% + 1rem));
+	transition: var(--transition);
+}
+
+#win.show,
+#lose.show {
+	opacity: 1;
+	transform: translate(-50%, -50%);
+}
+
+/*-- WebGL canvas --*/
 
 #webgl {
 	position: fixed;
@@ -543,7 +550,7 @@ button {
 
 /*-- Animations --*/
 
-@keyframes pulse {
+@keyframes click {
 
 	0%,
 	20%,
@@ -552,7 +559,7 @@ button {
 	}
 
 	10% {
-		transform: scale(0.7);
+		transform: scale(0.6);
 	}
 }
 

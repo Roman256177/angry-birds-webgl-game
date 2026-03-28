@@ -13,6 +13,32 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 
+/*-- Constants --*/
+
+const OBJECT_TYPES = {
+	Pig: "pig",
+	Box_Stone: "stone",
+	Box_Wood: "wood",
+	Box_Ice: "ice",
+	Bird: "bird",
+};
+
+const HEALTH = { pig: 25, wood: 50, stone: 75, ice: 25, bird: 100 };
+const MASS = { pig: 1, wood: 2, stone: 3, ice: 1, bird: 1 };
+
+const STAR_THRESHOLDS = [0.175, 0.5, 0.825];
+const SLINGSHOT_POS = new THREE.Vector3(27.5, 6.75, 0);
+const SKY_COLOR = new THREE.Color(0x5aaee8);
+
+const SHOOT_FORCE = 40;
+const MIN_IMPACT = 2;
+const MAX_PULL = 4;
+const SHOOT_ARC = 0.25;
+const WAKE_RADIUS_SQ = 50;
+const SNOW_COUNT = 3000;
+const SNOW_AREA = 300;
+const SNOW_HEIGHT = 120;
+
 /*-- Game --*/
 
 class Game {
@@ -44,7 +70,7 @@ class Game {
 			selectBtns: $$(".select-btn"),
 			soundBtn: $("sound-btn"),
 			fullscreenBtn: $("fullscreen-btn"),
-			fullscreenIcons: $$(".fullscreen-icon"),
+			fullscreenIcons: $$(".fullscreen"),
 			zoomSpans: $$("#zoom span"),
 			powerSpans: $$("#power span"),
 			closeBtn: $("close-btn"),
@@ -55,8 +81,8 @@ class Game {
 			destructionProgress: $("destruction-progress"),
 			destructionStars: $$(".destruction-star"),
 			totalStars: $("stars-total"),
-			win: $("end-win"),
-			lose: $("end-lose"),
+			win: $("win"),
+			lose: $("lose"),
 		};
 	}
 
@@ -106,9 +132,9 @@ class Game {
 				shoot: audio("/sounds/slingshot/shoot.wav"),
 				stretch: audio("/sounds/slingshot/stretch.wav"),
 			},
-			end: {
-				win: audio("/sounds/end/win.wav"),
-				lose: audio("/sounds/end/lose.wav"),
+			result: {
+				win: audio("/sounds/result/win.wav"),
+				lose: audio("/sounds/result/lose.wav"),
 			},
 			ui: {
 				click: audio("/sounds/ui/click.wav"),
@@ -119,25 +145,8 @@ class Game {
 	}
 
 	initData() {
-		this.shootForce = 40;
-		this.minImpact = 2;
-		this.maxPull = 4;
-		this.shootArc = 0.25;
-		this.wakeRadiusSq = 20;
-		this.starThresholds = [0.175, 0.5, 0.825];
-		this.slingshotPos = new THREE.Vector3(27.5, 6.75, 0);
-
-		this.health = { pig: 25, wood: 50, stone: 75, ice: 25, bird: 100 };
-		this.mass = { pig: 1, wood: 2, stone: 3, ice: 1, bird: 1 };
-
-		this.snowCount = 3000;
-		this.snowArea = 300;
-		this.snowHeight = 120;
-
-		this.skyColor = new THREE.Color(0x5aaee8);
 		this.sizes = { width: window.innerWidth, height: window.innerHeight };
 		this.prevTime = 0;
-
 		this.vec3 = new THREE.Vector3();
 
 		this.isSound = false;
@@ -169,25 +178,12 @@ class Game {
 		this.levels = { 1: [], 2: [], 3: [] };
 		this.stars = { 1: 0, 2: 0, 3: 0 };
 
-		this.currentLevel = null;
-		this.levelHealth = 0;
-		this.levelDamage = 0;
-		this.birds = [];
-		this.pigs = [];
-		this.boxes = [];
-		this.physicsObjects = [];
-		this.activeBird = null;
-		this.activeBirdIndex = 0;
-		this.pigsCleared = false;
-		this.resultTimeout = null;
-
-		this.bodiesToRemove = [];
-		this.objectsToDestroy = [];
+		this.resetLevelState();
 	}
 
 	initScene() {
 		this.scene = new THREE.Scene();
-		this.scene.fog = new THREE.Fog(this.skyColor, 1, 400);
+		this.scene.fog = new THREE.Fog(SKY_COLOR, 1, 400);
 
 		this.camera = new THREE.PerspectiveCamera(
 			45,
@@ -206,7 +202,7 @@ class Game {
 		});
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 		this.renderer.shadowMap.enabled = true;
-		this.renderer.setClearColor(this.skyColor);
+		this.renderer.setClearColor(SKY_COLOR);
 		this.updateRenderer();
 	}
 
@@ -264,15 +260,15 @@ class Game {
 	}
 
 	initSnow() {
-		const positions = new Float32Array(this.snowCount * 3);
-		const speeds = new Float32Array(this.snowCount);
-		const winds = new Float32Array(this.snowCount);
-		const sizes = new Float32Array(this.snowCount);
+		const positions = new Float32Array(SNOW_COUNT * 3);
+		const speeds = new Float32Array(SNOW_COUNT);
+		const winds = new Float32Array(SNOW_COUNT);
+		const sizes = new Float32Array(SNOW_COUNT);
 
-		for (let i = 0; i < this.snowCount; i++) {
-			positions[i * 3] = (Math.random() - 0.5) * this.snowArea - 100;
-			positions[i * 3 + 1] = Math.random() * this.snowHeight;
-			positions[i * 3 + 2] = (Math.random() - 0.5) * this.snowArea;
+		for (let i = 0; i < SNOW_COUNT; i++) {
+			positions[i * 3] = (Math.random() - 0.5) * SNOW_AREA - 100;
+			positions[i * 3 + 1] = Math.random() * SNOW_HEIGHT;
+			positions[i * 3 + 2] = (Math.random() - 0.5) * SNOW_AREA;
 			speeds[i] = 1 + Math.random() * 2;
 			winds[i] = Math.random() * Math.PI * 2;
 			sizes[i] = 1 + Math.random();
@@ -314,14 +310,14 @@ class Game {
 				depth: 0,
 				curveSegments: 1,
 			}),
-			new THREE.MeshBasicMaterial({ color: this.skyColor, fog: false }),
+			new THREE.MeshBasicMaterial({ color: SKY_COLOR, fog: false }),
 		);
 		this.subtitle.position.set(-115, 45, 0);
 		group.add(this.subtitle);
 
 		const titleGeo = new TextGeometry("Angry Birds", {
 			font,
-			size: 43,
+			size: 42,
 			depth: 0,
 			curveSegments: 1,
 		});
@@ -346,7 +342,7 @@ class Game {
 	}
 
 	initSlingshot() {
-		const { x, y } = this.slingshotPos;
+		const { x, y } = SLINGSHOT_POS;
 
 		const makeGeo = (z) => {
 			const geo = new LineGeometry();
@@ -367,16 +363,16 @@ class Game {
 	}
 
 	updateSlingshotResolution() {
+		const dpr = Math.min(window.devicePixelRatio, 2);
 		this.slingMat.resolution.set(
-			this.sizes.width * Math.min(window.devicePixelRatio, 2),
-			this.sizes.height * Math.min(window.devicePixelRatio, 2),
+			this.sizes.width * dpr,
+			this.sizes.height * dpr,
 		);
 	}
 
 	updateSlingshot() {
 		const { x, y, z } = this.activeBird.position;
-		const sx = this.slingshotPos.x;
-		const sy = this.slingshotPos.y;
+		const { x: sx, y: sy } = SLINGSHOT_POS;
 		this.slingLeft.geometry.setPositions([sx, sy, 1.5, x, y, z]);
 		this.slingRight.geometry.setPositions([sx, sy, -1.5, x, y, z]);
 		this.slingEndPos.set(x, y, z);
@@ -385,15 +381,13 @@ class Game {
 	releaseSlingshot() {
 		const endL = this.slingEndPos.clone();
 		const endR = this.slingEndPos.clone();
-		const target = this.slingshotPos;
-		const sx = target.x;
-		const sy = target.y;
+		const { x: sx, y: sy } = SLINGSHOT_POS;
 
 		const animate = (end, z, geo) =>
 			gsap.to(end, {
-				x: target.x,
-				y: target.y,
-				z: target.z,
+				x: SLINGSHOT_POS.x,
+				y: SLINGSHOT_POS.y,
+				z: SLINGSHOT_POS.z,
 				duration: 1,
 				ease: "elastic.out(1, 0.5)",
 				onUpdate: () => geo.setPositions([sx, sy, z, end.x, end.y, end.z]),
@@ -496,7 +490,7 @@ class Game {
 		document.body.classList.remove("grabbing");
 		this.isDrag = false;
 
-		if (this.pullVector && this.pullVector.y > 0.2) {
+		if (this.pullVector?.y > 0.2) {
 			this.playSound(this.sounds.slingshot.shoot);
 			this.shootBird(this.pullVector);
 		} else if (this.activeBird) {
@@ -516,19 +510,14 @@ class Game {
 	snapBirdToSlingshot() {
 		document.body.classList.add("pointer");
 		gsap.to(this.activeBird.position, {
-			x: this.slingshotPos.x,
-			y: this.slingshotPos.y,
-			z: this.slingshotPos.z,
+			x: SLINGSHOT_POS.x,
+			y: SLINGSHOT_POS.y,
+			z: SLINGSHOT_POS.z,
 			duration: 0.25,
 			ease: "back.out(1.7)",
 			onUpdate: () => {
 				const body = this.activeBird?.userData.body;
-				if (body)
-					body.position.set(
-						this.activeBird.position.x,
-						this.activeBird.position.y,
-						this.activeBird.position.z,
-					);
+				if (body) this.syncBodyToMesh(body, this.activeBird);
 				this.updateSlingshot();
 			},
 		});
@@ -544,12 +533,22 @@ class Game {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
 
+	syncBodyToMesh(body, mesh) {
+		body.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
+	}
+
 	/*-- Sound --*/
 
 	playSound(sound) {
 		if (!sound || !this.isSound || document.hidden) return;
 		sound.currentTime = 0;
 		sound.play().catch(() => {});
+	}
+
+	pauseSound(sound) {
+		if (!sound) return;
+		sound.pause();
+		sound.currentTime = 0;
 	}
 
 	toggleSound() {
@@ -566,6 +565,7 @@ class Game {
 	soundOn() {
 		this.sounds.music.play().catch(() => {});
 	}
+
 	soundOff() {
 		this.allSounds.forEach((s) => {
 			s.pause();
@@ -700,20 +700,21 @@ class Game {
 	}
 
 	setProgress(value) {
-		const from =
-			(parseFloat(this.elements.loaderProgress.style.getPropertyValue("--s")) ||
-				0) * 100;
-		const to = value * 100;
 		this.elements.loaderProgress.style.setProperty("--s", value);
-
-		const start = performance.now();
-		const tick = (time) => {
-			const t = Math.min((time - start) / 500, 1);
-			this.elements.loaderPercent.textContent =
-				Math.round(from + (to - from) * t) + "%";
-			if (t < 1) requestAnimationFrame(tick);
-		};
-		requestAnimationFrame(tick);
+		const from = parseFloat(this.elements.loaderPercent.textContent) || 0;
+		const to = value * 100;
+		const el = this.elements.loaderPercent;
+		gsap.to(
+			{ v: from },
+			{
+				v: to,
+				duration: 0.5,
+				ease: "none",
+				onUpdate() {
+					el.textContent = Math.round(this.targets()[0].v) + "%";
+				},
+			},
+		);
 	}
 
 	/*-- Camera --*/
@@ -771,9 +772,9 @@ class Game {
 			tl.to(
 				this.subtitle.material.color,
 				{
-					r: show ? 1 : this.skyColor.r,
-					g: show ? 1 : this.skyColor.g,
-					b: show ? 1 : this.skyColor.b,
+					r: show ? 1 : SKY_COLOR.r,
+					g: show ? 1 : SKY_COLOR.g,
+					b: show ? 1 : SKY_COLOR.b,
 					duration: 1,
 					ease: "power1.inOut",
 				},
@@ -805,10 +806,8 @@ class Game {
 		clearTimeout(this.resultTimeout);
 		this.elements.win.classList.remove("show");
 		this.elements.lose.classList.remove("show");
-		this.sounds.end.win.pause();
-		this.sounds.end.win.currentTime = 0;
-		this.sounds.end.lose.pause();
-		this.sounds.end.lose.currentTime = 0;
+		this.pauseSound(this.sounds.result.win);
+		this.pauseSound(this.sounds.result.lose);
 
 		if (this.pigsCleared && this.currentLevel) {
 			this.updateStars(Math.min(this.levelDamage / this.levelHealth, 1));
@@ -825,6 +824,23 @@ class Game {
 		this.elements.select.classList.add("show");
 	}
 
+	resetLevelState() {
+		this.currentLevel = null;
+		this.levelHealth = 0;
+		this.levelDamage = 0;
+		this.birds = this.birds ?? [];
+		this.pigs = [];
+		this.boxes = [];
+		this.physicsObjects = [];
+		this.activeBird = null;
+		this.activeBirdIndex = 0;
+		this.pigsCleared = false;
+		this.isEnding = false;
+		this.bodiesToRemove = [];
+		this.objectsToDestroy = [];
+		this.resultTimeout = null;
+	}
+
 	async setupLevel(id) {
 		this.currentLevel = id;
 		this.activeBirdIndex = 0;
@@ -838,7 +854,7 @@ class Game {
 
 		this.levelHealth = this.levels[id].reduce((total, obj) => {
 			const type = this.getType(obj.name);
-			return type ? total + this.health[type] : total;
+			return type ? total + HEALTH[type] : total;
 		}, 0);
 
 		await this.wait(500);
@@ -878,7 +894,7 @@ class Game {
 
 	spawnObj(obj, type, i, done = null) {
 		obj.userData.dead = false;
-		obj.userData.health = this.health[type];
+		obj.userData.health = HEALTH[type];
 		obj.userData.type = type;
 		obj.position.copy(obj.userData.origin.position);
 		obj.quaternion.copy(obj.userData.origin.quaternion);
@@ -889,11 +905,9 @@ class Game {
 	}
 
 	getType(name) {
-		if (name.startsWith("Pig")) return "pig";
-		if (name.startsWith("Box_Stone")) return "stone";
-		if (name.startsWith("Box_Wood")) return "wood";
-		if (name.startsWith("Box_Ice")) return "ice";
-		if (name.startsWith("Bird")) return "bird";
+		for (const [prefix, type] of Object.entries(OBJECT_TYPES)) {
+			if (name.startsWith(prefix)) return type;
+		}
 		return null;
 	}
 
@@ -904,10 +918,8 @@ class Game {
 		this.bodiesToRemove = [];
 		this.objectsToDestroy = [];
 
-		const all = [...this.physicsObjects, ...this.birds];
-
 		await Promise.all(
-			all.map(
+			[...this.physicsObjects, ...this.birds].map(
 				(obj, i) =>
 					new Promise((resolve) => {
 						if (obj.userData.body) {
@@ -923,16 +935,7 @@ class Game {
 			),
 		);
 
-		this.pigs = [];
-		this.boxes = [];
-		this.physicsObjects = [];
-		this.activeBird = null;
-		this.activeBirdIndex = 0;
-		this.currentLevel = null;
-		this.levelHealth = 0;
-		this.levelDamage = 0;
-		this.pigsCleared = false;
-		this.isEnding = false;
+		this.resetLevelState();
 	}
 
 	animateObj(obj, show, i, done = null) {
@@ -962,14 +965,14 @@ class Game {
 				: 0;
 		this.elements.destructionProgress.style.setProperty("--s", ratio);
 		this.elements.destructionStars.forEach((star, i) =>
-			star.classList.toggle("active", ratio >= this.starThresholds[i]),
+			star.classList.toggle("active", ratio >= STAR_THRESHOLDS[i]),
 		);
 	}
 
 	updateStars(destruction) {
 		if (!this.pigsCleared) return;
 
-		const earned = this.starThresholds.filter((t) => destruction >= t).length;
+		const earned = STAR_THRESHOLDS.filter((t) => destruction >= t).length;
 		if (earned > this.stars[this.currentLevel]) {
 			this.stars[this.currentLevel] = earned;
 		}
@@ -980,24 +983,22 @@ class Game {
 		);
 
 		const next = this.currentLevel + 1;
-		if (this.stars[this.currentLevel] >= 1 && this.levels[next]) {
-			const nextBtn = this.elements.selectBtns[next - 1];
-			if (nextBtn) nextBtn.classList.remove("locked");
+		const nextBtn = this.elements.selectBtns[next - 1];
+		if (this.stars[this.currentLevel] >= 1 && this.levels[next] && nextBtn) {
+			nextBtn.classList.remove("locked");
 		}
 
 		const btn = this.elements.selectBtns[this.currentLevel - 1];
-		if (btn) {
-			btn
-				.querySelectorAll(".select-btn-star")
-				.forEach((star, i) =>
-					star.classList.toggle("active", i < this.stars[this.currentLevel]),
-				);
-		}
+		btn
+			?.querySelectorAll(".select-btn-star")
+			.forEach((star, i) =>
+				star.classList.toggle("active", i < this.stars[this.currentLevel]),
+			);
 	}
 
 	showResult(win) {
 		const key = win ? "win" : "lose";
-		this.playSound(this.sounds.end[key]);
+		this.playSound(this.sounds.result[key]);
 		const el = this.elements[key];
 		el.classList.add("show");
 		this.resultTimeout = setTimeout(() => el.classList.remove("show"), 4000);
@@ -1013,8 +1014,8 @@ class Game {
 
 	createBody(obj, type) {
 		const isSphere = type === "pig" || type === "bird";
-
 		let shape;
+
 		if (isSphere) {
 			shape = new CANNON.Sphere(0.5);
 		} else {
@@ -1049,7 +1050,7 @@ class Game {
 
 		body.addEventListener("collide", (e) => {
 			const impact = e.contact.getImpactVelocityAlongNormal();
-			if (Math.abs(impact) < this.minImpact) return;
+			if (Math.abs(impact) < MIN_IMPACT) return;
 			const dmg = Math.abs(impact) * 4;
 			this.damage(obj, dmg);
 			if (e.body.userData?.obj) this.damage(e.body.userData.obj, dmg * 0.5);
@@ -1062,7 +1063,7 @@ class Game {
 			setTimeout(() => {
 				if (!obj.userData.body) return;
 				body.type = CANNON.Body.DYNAMIC;
-				body.mass = this.mass[type];
+				body.mass = MASS[type];
 				body.updateMassProperties();
 				body.wakeUp();
 			}, 500);
@@ -1088,6 +1089,7 @@ class Game {
 
 	destroy(obj) {
 		const body = obj.userData.body;
+
 		if (body) {
 			const { x: px, y: py, z: pz } = body.position;
 			this.world.bodies.forEach((b) => {
@@ -1095,9 +1097,8 @@ class Game {
 				const dx = b.position.x - px;
 				const dy = b.position.y - py;
 				const dz = b.position.z - pz;
-				if (dx * dx + dy * dy + dz * dz < this.wakeRadiusSq) b.wakeUp();
+				if (dx * dx + dy * dy + dz * dz < WAKE_RADIUS_SQ) b.wakeUp();
 			});
-
 			this.bodiesToRemove.push(body);
 			obj.userData.body = null;
 		}
@@ -1109,7 +1110,6 @@ class Game {
 		this.physicsObjects = this.physicsObjects.filter((o) => o !== obj);
 
 		this.animateObj(obj, false, 0, () => this.scene.remove(obj));
-
 		this.updateStats();
 		this.checkEnd();
 	}
@@ -1121,24 +1121,25 @@ class Game {
 
 		const bird = this.birds[this.activeBirdIndex];
 		this.activeBird = bird;
-
 		this.createBody(bird, "bird");
 		document.body.classList.add("pointer");
 
 		gsap.to(bird.position, {
-			x: this.slingshotPos.x,
-			y: this.slingshotPos.y,
-			z: this.slingshotPos.z,
+			x: SLINGSHOT_POS.x,
+			y: SLINGSHOT_POS.y,
+			z: SLINGSHOT_POS.z,
 			duration: 0.5,
 			ease: "back.out(1.7)",
 			onUpdate: () => {
-				if (bird.userData.body)
-					bird.userData.body.position.set(
-						bird.position.x,
-						bird.position.y,
-						bird.position.z,
-					);
+				const body = bird.userData.body;
+				if (body) this.syncBodyToMesh(body, bird);
 			},
+		});
+
+		gsap.to(bird.rotation, {
+			y: 0,
+			duration: 0.5,
+			ease: "back.out(1.7)",
 		});
 	}
 
@@ -1153,19 +1154,19 @@ class Game {
 		document.body.classList.remove("grabbing");
 
 		body.type = CANNON.Body.DYNAMIC;
-		body.mass = this.mass.bird;
+		body.mass = MASS.bird;
 		body.updateMassProperties();
 		body.wakeUp();
 
 		const dir = new THREE.Vector3()
-			.subVectors(this.slingshotPos, this.activeBird.position)
+			.subVectors(SLINGSHOT_POS, this.activeBird.position)
 			.normalize();
-		const force = vector.y * this.shootForce;
+		const force = vector.y * SHOOT_FORCE;
 
 		body.applyLocalImpulse(
 			new CANNON.Vec3(
 				dir.x * force,
-				(dir.y + this.shootArc) * force,
+				(dir.y + SHOOT_ARC) * force,
 				dir.z * force,
 			),
 			new CANNON.Vec3(0, 0, 0),
@@ -1183,7 +1184,7 @@ class Game {
 		}, 2000);
 	}
 
-	/*-- End --*/
+	/*-- Result --*/
 
 	checkEnd() {
 		if (this.pigs.length === 0 && !this.pigsCleared) {
@@ -1197,26 +1198,27 @@ class Game {
 			!this.isEnding
 		) {
 			this.isEnding = true;
-
-			const waitForSleep = () => {
-				const anyAwake = this.physicsObjects.some(
-					(obj) => obj.userData.body?.sleepState !== CANNON.Body.SLEEPING,
-				);
-				if (anyAwake) {
-					this.resultTimeout = setTimeout(waitForSleep, 50);
-					return;
-				}
-				const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
-				this.updateStars(ratio);
-				this.isPlay = false;
-				this.resultTimeout = setTimeout(
-					() => this.showResult(this.pigsCleared),
-					500,
-				);
-			};
-
-			waitForSleep();
+			this.waitForSleep();
 		}
+	}
+
+	waitForSleep() {
+		const anyAwake = this.physicsObjects.some(
+			(obj) => obj.userData.body?.sleepState !== CANNON.Body.SLEEPING,
+		);
+
+		if (anyAwake) {
+			this.resultTimeout = setTimeout(() => this.waitForSleep(), 50);
+			return;
+		}
+
+		const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
+		this.updateStars(ratio);
+		this.isPlay = false;
+		this.resultTimeout = setTimeout(
+			() => this.showResult(this.pigsCleared),
+			500,
+		);
 	}
 
 	/*-- Loop --*/
@@ -1283,21 +1285,24 @@ class Game {
 			obj.quaternion.copy(body.quaternion);
 		}
 
+		this.updateDraggedBird();
+	}
+
+	updateDraggedBird() {
 		if (!this.activeBird?.userData.body || !this.isDrag || !this.pullVector)
 			return;
 
-		const radius = this.pullVector.y * this.maxPull;
+		const radius = this.pullVector.y * MAX_PULL;
 		const angle = this.pullVector.x * Math.PI * 0.25;
-		const x = this.slingshotPos.x + radius;
-		const y = this.slingshotPos.y - radius * 0.5;
-		const z = this.slingshotPos.z - Math.sin(angle) * radius;
+		const x = SLINGSHOT_POS.x + radius;
+		const y = SLINGSHOT_POS.y - radius * 0.5;
+		const z = SLINGSHOT_POS.z - Math.sin(angle) * radius;
 
 		this.activeBird.position.set(x, y, z);
-		this.activeBird.userData.body.position.set(x, y, z);
+		this.syncBodyToMesh(this.activeBird.userData.body, this.activeBird);
 		this.updateSlingshot();
 	}
 }
 
 const game = new Game();
 game.init();
-window.game = game;
