@@ -76,6 +76,7 @@ class Game {
 			closeBtn: $("close-btn"),
 			homes: $$(".home"),
 			levels: $$(".level"),
+			levelNumber: $("level-number"),
 			birdsLeft: $("birds-left"),
 			pigsLeft: $("pigs-left"),
 			destructionProgress: $("destruction-progress"),
@@ -852,6 +853,8 @@ class Game {
 		this.pigsCleared = false;
 		this.isEnding = false;
 
+		this.elements.levelNumber.textContent = this.currentLevel;
+
 		this.levelHealth = this.levels[id].reduce((total, obj) => {
 			const type = this.getType(obj.name);
 			return type ? total + HEALTH[type] : total;
@@ -1134,12 +1137,6 @@ class Game {
 				const body = bird.userData.body;
 				if (body) this.syncBodyToMesh(body, bird);
 			},
-		});
-
-		gsap.to(bird.rotation, {
-			y: 0,
-			duration: 0.5,
-			ease: "back.out(1.7)",
 		});
 	}
 
