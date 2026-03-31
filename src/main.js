@@ -34,7 +34,7 @@ const SHOOT_FORCE = 40;
 const MIN_IMPACT = 2;
 const MAX_PULL = 4;
 const SHOOT_ARC = 0.25;
-const WAKE_RADIUS_SQ = 50;
+const WAKE_RADIUS_SQ = 100;
 const SNOW_COUNT = 3000;
 const SNOW_AREA = 300;
 const SNOW_HEIGHT = 120;
@@ -829,7 +829,6 @@ class Game {
 		this.currentLevel = null;
 		this.levelHealth = 0;
 		this.levelDamage = 0;
-		this.birds = this.birds ?? [];
 		this.pigs = [];
 		this.boxes = [];
 		this.physicsObjects = [];
@@ -1048,7 +1047,6 @@ class Game {
 		body.sleepTimeLimit = 0.8;
 
 		obj.userData.body = body;
-		obj.userData.type = type;
 		body.userData = { obj };
 
 		body.addEventListener("collide", (e) => {
@@ -1155,16 +1153,14 @@ class Game {
 		body.updateMassProperties();
 		body.wakeUp();
 
-		const dir = new THREE.Vector3()
-			.subVectors(SLINGSHOT_POS, this.activeBird.position)
-			.normalize();
+		this.vec3.subVectors(SLINGSHOT_POS, this.activeBird.position).normalize();
 		const force = vector.y * SHOOT_FORCE;
 
 		body.applyLocalImpulse(
 			new CANNON.Vec3(
-				dir.x * force,
-				(dir.y + SHOOT_ARC) * force,
-				dir.z * force,
+				this.vec3.x * force,
+				(this.vec3.y + SHOOT_ARC) * force,
+				this.vec3.z * force,
 			),
 			new CANNON.Vec3(0, 0, 0),
 		);
@@ -1212,10 +1208,7 @@ class Game {
 		const ratio = Math.min(this.levelDamage / this.levelHealth, 1);
 		this.updateStars(ratio);
 		this.isPlay = false;
-		this.resultTimeout = setTimeout(
-			() => this.showResult(this.pigsCleared),
-			500,
-		);
+		this.showResult(this.pigsCleared);
 	}
 
 	/*-- Loop --*/

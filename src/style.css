@@ -363,7 +363,6 @@ button {
 	border-radius: var(--bar-size);
 	background-color: var(--color-white-80);
 	transform: scaleX(0);
-	transition: transform var(--duration) var(--ease);
 }
 
 #zoom span::before,
@@ -376,7 +375,6 @@ button {
 	background-color: var(--color-white);
 	transform: scaleX(0);
 	transform-origin: inherit;
-	transition: inherit;
 }
 
 #zoom span.show,
