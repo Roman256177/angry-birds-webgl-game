@@ -375,6 +375,7 @@ button {
 	background-color: var(--color-white);
 	transform: scaleX(0);
 	transform-origin: inherit;
+	transition: transform var(--duration) var(--ease);
 }
 
 #zoom span.show,
