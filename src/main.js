@@ -1003,7 +1003,10 @@ class Game {
 		this.playSound(this.sounds.result[key]);
 		const el = this.elements[key];
 		el.classList.add("show");
-		this.resultTimeout = setTimeout(() => el.classList.remove("show"), 4000);
+		this.resultTimeout = setTimeout(() => {
+			el.classList.remove("show");
+			this.resultTimeout = setTimeout(() => this.changeToHome(), 1000);
+		}, 4000);
 	}
 
 	/*-- Physics --*/
